@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
 from app.config import get_settings
-from app.database import engine, Base
+from app.database import engine
+from app.models import Base
 from app.routers import (
     auth_router,
     users_router,
@@ -24,10 +26,19 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS
+# CORS - permitir frontend local y en producción
+origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    os.getenv("FRONTEND_URL", ""),
+    "https://*.up.railway.app",
+]
+# Filtrar vacíos
+origins = [o for o in origins if o]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["*"],  # En producción, cambiar a origins específicos
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
