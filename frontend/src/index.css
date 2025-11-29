@@ -1519,3 +1519,29 @@ body {
 .group-card-summary h4 {
   color: var(--primary);
 }
+
+/* Purple button for confirming settlement */
+.btn-purple {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  border: none;
+}
+
+.btn-purple:hover {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+}
+
+.text-purple {
+  color: #8b5cf6;
+}
+
+/* Info box */
+.info-box {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}

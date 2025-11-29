@@ -7,7 +7,8 @@ import {
   ArrowDownLeft,
   Plus,
   X,
-  RefreshCw
+  RefreshCw,
+  RotateCcw
 } from 'lucide-react';
 
 const Transactions = () => {
@@ -20,6 +21,8 @@ const Transactions = () => {
   const [formData, setFormData] = useState({
     from_account_id: '',
     to_account_id: '',
+    confirming_account_id: '',
+    charge_account_id: '',
     amount: '',
     description: ''
   });
@@ -63,16 +66,27 @@ const Transactions = () => {
       } else if (transactionType === 'deposit') {
         payload.to_account_id = formData.to_account_id;
         await api.post('/transactions/deposit', payload);
-      } else {
+      } else if (transactionType === 'withdrawal') {
         payload.from_account_id = formData.from_account_id;
         await api.post('/transactions/withdrawal', payload);
+      } else if (transactionType === 'confirming_settlement') {
+        payload.confirming_account_id = formData.confirming_account_id;
+        payload.charge_account_id = formData.charge_account_id;
+        await api.post('/transactions/confirming-settlement', payload);
       }
 
       setShowModal(false);
-      setFormData({ from_account_id: '', to_account_id: '', amount: '', description: '' });
+      setFormData({ from_account_id: '', to_account_id: '', confirming_account_id: '', charge_account_id: '', amount: '', description: '' });
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error al procesar la transacción');
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map(e => e.msg).join(', '));
+      } else if (typeof detail === 'string') {
+        setError(detail);
+      } else {
+        setError('Error al procesar la transacción');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -101,6 +115,8 @@ const Transactions = () => {
         return <ArrowDownLeft className="text-green" size={20} />;
       case 'withdrawal':
         return <ArrowUpRight className="text-red" size={20} />;
+      case 'confirming_settlement':
+        return <RotateCcw className="text-purple" size={20} />;
       default:
         return <RefreshCw className="text-blue" size={20} />;
     }
@@ -112,6 +128,8 @@ const Transactions = () => {
         return 'Depósito';
       case 'withdrawal':
         return 'Retiro';
+      case 'confirming_settlement':
+        return 'Vto. Confirming';
       default:
         return 'Transferencia';
     }
@@ -119,13 +137,14 @@ const Transactions = () => {
 
   const openModal = (type) => {
     setTransactionType(type);
-    setFormData({ from_account_id: '', to_account_id: '', amount: '', description: '' });
+    setFormData({ from_account_id: '', to_account_id: '', confirming_account_id: '', charge_account_id: '', amount: '', description: '' });
     setError('');
     setShowModal(true);
   };
 
-  // Filtrar cuentas que permiten transferencia
-  const transferableAccounts = accounts; // En un caso real filtrarías por can_transfer
+  // Filtrar cuentas por tipo
+  const confirmingAccounts = accounts.filter(a => a.account_type === 'confirming');
+  const corrienteAccounts = accounts.filter(a => a.account_type === 'corriente');
 
   if (loading) {
     return <div className="loading-container"><p>Cargando...</p></div>;
@@ -153,6 +172,12 @@ const Transactions = () => {
                 <ArrowUpRight size={18} />
                 Retirar
               </button>
+              {confirmingAccounts.length > 0 && (
+                <button className="btn btn-purple" onClick={() => openModal('confirming_settlement')}>
+                  <RotateCcw size={18} />
+                  Vto. Confirming
+                </button>
+              )}
             </>
           )}
         </div>
@@ -229,6 +254,7 @@ const Transactions = () => {
                 {transactionType === 'transfer' && 'Nueva Transferencia'}
                 {transactionType === 'deposit' && 'Nuevo Depósito'}
                 {transactionType === 'withdrawal' && 'Nuevo Retiro'}
+                {transactionType === 'confirming_settlement' && 'Vencimiento Confirming'}
               </h2>
               <button className="btn btn-icon" onClick={() => setShowModal(false)}>
                 <X size={20} />
@@ -236,6 +262,49 @@ const Transactions = () => {
             </div>
             <form onSubmit={handleSubmit}>
               {error && <div className="error-message">{error}</div>}
+
+              {transactionType === 'confirming_settlement' && (
+                <>
+                  <div className="info-box">
+                    Registra el vencimiento de una factura pagada por confirming. 
+                    El banco cobrará de la cuenta corriente y se regenerará el disponible del confirming.
+                  </div>
+                  
+                  <div className="form-group">
+                    <label htmlFor="confirming_account_id">Cuenta Confirming</label>
+                    <select
+                      id="confirming_account_id"
+                      value={formData.confirming_account_id}
+                      onChange={(e) => setFormData({ ...formData, confirming_account_id: e.target.value })}
+                      required
+                    >
+                      <option value="">Seleccionar confirming</option>
+                      {confirmingAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.company?.name} - {account.name} (Emitido: {formatCurrency(Math.abs(account.balance))})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="charge_account_id">Cuenta de Cargo (Corriente)</label>
+                    <select
+                      id="charge_account_id"
+                      value={formData.charge_account_id}
+                      onChange={(e) => setFormData({ ...formData, charge_account_id: e.target.value })}
+                      required
+                    >
+                      <option value="">Seleccionar cuenta corriente</option>
+                      {corrienteAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.company?.name} - {account.name} ({formatCurrency(account.balance)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
 
               {(transactionType === 'transfer' || transactionType === 'withdrawal') && (
                 <div className="form-group">
@@ -247,7 +316,7 @@ const Transactions = () => {
                     required
                   >
                     <option value="">Seleccionar cuenta</option>
-                    {transferableAccounts.map((account) => (
+                    {accounts.map((account) => (
                       <option key={account.id} value={account.id}>
                         {account.company?.name} - {account.name} ({formatCurrency(account.balance, account.currency)})
                       </option>
@@ -278,7 +347,9 @@ const Transactions = () => {
               )}
 
               <div className="form-group">
-                <label htmlFor="amount">Monto</label>
+                <label htmlFor="amount">
+                  {transactionType === 'confirming_settlement' ? 'Importe del vencimiento' : 'Monto'}
+                </label>
                 <input
                   type="number"
                   id="amount"
@@ -298,7 +369,7 @@ const Transactions = () => {
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Concepto de la operación"
+                  placeholder={transactionType === 'confirming_settlement' ? 'Ej: Vencimiento factura #123' : 'Concepto de la operación'}
                 />
               </div>
 

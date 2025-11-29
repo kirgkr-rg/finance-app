@@ -160,6 +160,6 @@ class Transaction(Base):
     
     __table_args__ = (
         CheckConstraint("amount > 0", name="positive_amount"),
-        CheckConstraint("transaction_type IN ('transfer', 'deposit', 'withdrawal')", name="valid_transaction_type"),
+        CheckConstraint("transaction_type IN ('transfer', 'deposit', 'withdrawal', 'confirming_settlement')", name="valid_transaction_type"),
         CheckConstraint("status IN ('pending', 'completed', 'failed', 'cancelled')", name="valid_status"),
     )

@@ -8,7 +8,7 @@ from decimal import Decimal
 from app.database import get_db
 from app.models import User, Account, AccountPermission, Transaction
 from app.schemas import (
-    TransferCreate, DepositCreate, WithdrawalCreate,
+    TransferCreate, DepositCreate, WithdrawalCreate, ConfirmingSettlementCreate,
     TransactionResponse, TransactionWithAccounts
 )
 from app.auth import get_current_user, get_current_supervisor, check_account_permission
@@ -190,6 +190,95 @@ def create_withdrawal(
         amount=withdrawal_data.amount,
         description=withdrawal_data.description,
         transaction_type="withdrawal",
+        status="completed",
+        created_by=current_user.id
+    )
+    
+    db.add(transaction)
+    db.commit()
+    db.refresh(transaction)
+    
+    return transaction
+
+
+@router.post("/confirming-settlement", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
+def create_confirming_settlement(
+    settlement_data: ConfirmingSettlementCreate,
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """
+    Registrar vencimiento de confirming (solo supervisores).
+    
+    Cuando vence una factura pagada por confirming:
+    - El banco cobra de la cuenta corriente indicada
+    - El disponible del confirming se regenera (aumenta)
+    """
+    # Obtener cuenta confirming
+    confirming_account = db.query(Account).filter(
+        Account.id == settlement_data.confirming_account_id,
+        Account.is_active == True
+    ).first()
+    
+    if not confirming_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cuenta confirming no encontrada"
+        )
+    
+    if confirming_account.account_type != "confirming":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La cuenta seleccionada no es de tipo confirming"
+        )
+    
+    # Obtener cuenta de cargo
+    charge_account = db.query(Account).filter(
+        Account.id == settlement_data.charge_account_id,
+        Account.is_active == True
+    ).first()
+    
+    if not charge_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cuenta de cargo no encontrada"
+        )
+    
+    if charge_account.account_type != "corriente":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La cuenta de cargo debe ser una cuenta corriente"
+        )
+    
+    # Verificar que hay saldo suficiente en la cuenta de cargo
+    if charge_account.balance < settlement_data.amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Saldo insuficiente en cuenta de cargo. Disponible: {charge_account.balance} {charge_account.currency}"
+        )
+    
+    # Verificar que el confirming tiene ese importe emitido (balance negativo)
+    emitido = abs(confirming_account.balance)
+    if settlement_data.amount > emitido:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El importe a liquidar ({settlement_data.amount}) supera lo emitido ({emitido})"
+        )
+    
+    # Realizar la liquidación:
+    # 1. Cobrar de la cuenta corriente
+    charge_account.balance -= settlement_data.amount
+    
+    # 2. Regenerar disponible del confirming (reducir lo emitido = aumentar balance hacia 0)
+    confirming_account.balance += settlement_data.amount
+    
+    # Crear transacción de registro
+    transaction = Transaction(
+        from_account_id=charge_account.id,
+        to_account_id=confirming_account.id,
+        amount=settlement_data.amount,
+        description=settlement_data.description or "Vencimiento confirming",
+        transaction_type="confirming_settlement",
         status="completed",
         created_by=current_user.id
     )

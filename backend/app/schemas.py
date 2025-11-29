@@ -264,6 +264,14 @@ class WithdrawalCreate(TransactionBase):
     from_account_id: UUID
 
 
+class ConfirmingSettlementCreate(BaseModel):
+    """Liquidación de vencimiento de confirming."""
+    confirming_account_id: UUID  # Cuenta confirming a regenerar
+    charge_account_id: UUID      # Cuenta corriente de donde se cobra
+    amount: Decimal = Field(..., gt=0)
+    description: Optional[str] = None
+
+
 class TransactionResponse(TransactionBase):
     id: UUID
     from_account_id: Optional[UUID]
