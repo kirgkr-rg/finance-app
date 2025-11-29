@@ -18,7 +18,8 @@ import {
   Upload,
   Download,
   Trash2,
-  FileText
+  FileText,
+  Eye
 } from 'lucide-react';
 
 const CompanyDashboard = () => {
@@ -205,6 +206,20 @@ const CompanyDashboard = () => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       alert('Error al descargar archivo');
+    }
+  };
+
+  const viewAttachment = async (attachment) => {
+    try {
+      const response = await api.get(`/attachments/${attachment.id}/download`, {
+        responseType: 'blob'
+      });
+      
+      const blob = new Blob([response.data], { type: attachment.content_type });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (error) {
+      alert('Error al abrir archivo');
     }
   };
 
@@ -620,7 +635,7 @@ const CompanyDashboard = () => {
       {/* Modal de Adjuntos */}
       {selectedTransaction && (
         <div className="modal-overlay" onClick={closeAttachmentsModal}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal-medium" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h2>Adjuntos</h2>
@@ -671,6 +686,13 @@ const CompanyDashboard = () => {
                         <span className="attachment-size">{formatFileSize(att.file_size)}</span>
                       </div>
                       <div className="attachment-actions">
+                        <button 
+                          className="btn btn-icon btn-sm" 
+                          onClick={() => viewAttachment(att)}
+                          title="Ver"
+                        >
+                          <Eye size={16} />
+                        </button>
                         <button 
                           className="btn btn-icon btn-sm" 
                           onClick={() => downloadAttachment(att)}

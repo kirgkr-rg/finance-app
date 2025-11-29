@@ -1045,6 +1045,11 @@ body {
   max-width: 800px;
 }
 
+.modal-medium {
+  max-width: 600px;
+  width: 90%;
+}
+
 .flow-content {
   padding: 1.5rem;
 }
