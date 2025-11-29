@@ -1,0 +1,356 @@
+import { useState, useEffect } from 'react';
+import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { Wallet, Plus, X, Edit, Trash2 } from 'lucide-react';
+
+const Accounts = () => {
+  const { isSupervisor } = useAuth();
+  const [accounts, setAccounts] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingAccount, setEditingAccount] = useState(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    company_id: '',
+    account_type: 'corriente',
+    currency: 'EUR',
+    initial_balance: '0',
+    credit_limit: '0'
+  });
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [accountsRes, companiesRes] = await Promise.all([
+        api.get('/accounts/'),
+        api.get('/companies/')
+      ]);
+      setAccounts(accountsRes.data);
+      setCompanies(companiesRes.data);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    try {
+      if (editingAccount) {
+        await api.patch(`/accounts/${editingAccount.id}`, {
+          name: formData.name,
+          credit_limit: parseFloat(formData.credit_limit)
+        });
+      } else {
+        await api.post('/accounts/', {
+          ...formData,
+          initial_balance: parseFloat(formData.initial_balance),
+          credit_limit: parseFloat(formData.credit_limit)
+        });
+      }
+      setShowModal(false);
+      setEditingAccount(null);
+      setFormData({ name: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0' });
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Error al guardar cuenta');
+    }
+  };
+
+  const handleEdit = (account) => {
+    setEditingAccount(account);
+    setFormData({
+      name: account.name,
+      company_id: account.company_id,
+      account_type: account.account_type,
+      currency: account.currency,
+      initial_balance: '0',
+      credit_limit: account.credit_limit || '0'
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (account) => {
+    if (parseFloat(account.balance) !== 0) {
+      alert('No se puede eliminar una cuenta con saldo. Primero transfiere o retira el saldo.');
+      return;
+    }
+    
+    if (!confirm(`¿Estás seguro de eliminar la cuenta "${account.name}"?`)) return;
+
+    try {
+      await api.delete(`/accounts/${account.id}`);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Error al eliminar cuenta');
+    }
+  };
+
+  const openNewModal = () => {
+    setEditingAccount(null);
+    setFormData({ name: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0' });
+    setShowModal(true);
+  };
+
+  const getAccountTypeLabel = (type) => {
+    switch(type) {
+      case 'credito': return 'Crédito';
+      case 'confirming': return 'Confirming';
+      default: return 'Corriente';
+    }
+  };
+
+  const formatCurrency = (amount, currency = 'EUR') => {
+    return new Intl.NumberFormat('es-ES', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount);
+  };
+
+  // Agrupar cuentas por empresa
+  const accountsByCompany = accounts.reduce((acc, account) => {
+    const companyId = account.company_id;
+    if (!acc[companyId]) {
+      acc[companyId] = {
+        company: account.company,
+        accounts: []
+      };
+    }
+    acc[companyId].accounts.push(account);
+    return acc;
+  }, {});
+
+  if (loading) {
+    return <div className="loading-container"><p>Cargando...</p></div>;
+  }
+
+  return (
+    <div className="page">
+      <header className="page-header">
+        <div>
+          <h1>Cuentas</h1>
+          <p>Gestiona las cuentas de las empresas</p>
+        </div>
+        {isSupervisor() && (
+          <button className="btn btn-primary" onClick={openNewModal}>
+            <Plus size={18} />
+            Nueva Cuenta
+          </button>
+        )}
+      </header>
+
+      {Object.keys(accountsByCompany).length === 0 ? (
+        <div className="empty-state">
+          <Wallet size={64} />
+          <h3>No hay cuentas</h3>
+          <p>No tienes acceso a ninguna cuenta</p>
+        </div>
+      ) : (
+        Object.values(accountsByCompany).map(({ company, accounts }) => (
+          <section key={company.id} className="card accounts-section">
+            <h2 className="section-title">{company.name}</h2>
+            <div className="accounts-table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Tipo</th>
+                    <th>Moneda</th>
+                    <th className="text-right">Saldo</th>
+                    <th className="text-right">Disponible</th>
+                    {isSupervisor() && <th>Acciones</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {accounts.map((account) => (
+                    <tr key={account.id}>
+                      <td>
+                        <div className="account-name-cell">
+                          <Wallet size={18} />
+                          {account.name}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`account-type-badge ${account.account_type}`}>
+                          {getAccountTypeLabel(account.account_type)}
+                        </span>
+                      </td>
+                      <td>{account.currency}</td>
+                      <td className="text-right">
+                        <span className={`balance ${parseFloat(account.balance) >= 0 ? 'positive' : 'negative'}`}>
+                          {formatCurrency(account.balance, account.currency)}
+                        </span>
+                      </td>
+                      <td className="text-right">
+                        <span className="balance positive">
+                          {formatCurrency(account.available, account.currency)}
+                        </span>
+                      </td>
+                      {isSupervisor() && (
+                        <td>
+                          <div className="table-actions">
+                            <button className="btn btn-icon" onClick={() => handleEdit(account)}>
+                              <Edit size={16} />
+                            </button>
+                            <button className="btn btn-icon danger" onClick={() => handleDelete(account)}>
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ))
+      )}
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingAccount ? 'Editar Cuenta' : 'Nueva Cuenta'}</h2>
+              <button className="btn btn-icon" onClick={() => setShowModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit}>
+              {error && <div className="error-message">{error}</div>}
+              
+              {!editingAccount && (
+                <div className="form-group">
+                  <label htmlFor="company_id">Empresa</label>
+                  <select
+                    id="company_id"
+                    value={formData.company_id}
+                    onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Seleccionar empresa</option>
+                    {companies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="name">Nombre de la cuenta</label>
+                <input
+                  type="text"
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Ej: Cuenta Principal"
+                  required
+                />
+              </div>
+
+              {!editingAccount && (
+                <>
+                  <div className="form-group">
+                    <label htmlFor="account_type">Tipo de cuenta</label>
+                    <select
+                      id="account_type"
+                      value={formData.account_type}
+                      onChange={(e) => setFormData({ ...formData, account_type: e.target.value })}
+                    >
+                      <option value="corriente">Corriente</option>
+                      <option value="credito">Crédito</option>
+                      <option value="confirming">Confirming</option>
+                    </select>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="currency">Moneda</label>
+                      <select
+                        id="currency"
+                        value={formData.currency}
+                        onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                      >
+                        <option value="EUR">EUR</option>
+                        <option value="USD">USD</option>
+                        <option value="GBP">GBP</option>
+                      </select>
+                    </div>
+
+                    {formData.account_type === 'corriente' && (
+                      <div className="form-group">
+                        <label htmlFor="initial_balance">Saldo Inicial</label>
+                        <input
+                          type="number"
+                          id="initial_balance"
+                          value={formData.initial_balance}
+                          onChange={(e) => setFormData({ ...formData, initial_balance: e.target.value })}
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {(formData.account_type === 'credito' || formData.account_type === 'confirming') && (
+                    <div className="form-group">
+                      <label htmlFor="credit_limit">
+                        {formData.account_type === 'credito' ? 'Límite de Crédito' : 'Límite Concedido'}
+                      </label>
+                      <input
+                        type="number"
+                        id="credit_limit"
+                        value={formData.credit_limit}
+                        onChange={(e) => setFormData({ ...formData, credit_limit: e.target.value })}
+                        min="0"
+                        step="0.01"
+                        required
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {editingAccount && (editingAccount.account_type === 'credito' || editingAccount.account_type === 'confirming') && (
+                <div className="form-group">
+                  <label htmlFor="credit_limit">
+                    {editingAccount.account_type === 'credito' ? 'Límite de Crédito' : 'Límite Concedido'}
+                  </label>
+                  <input
+                    type="number"
+                    id="credit_limit"
+                    value={formData.credit_limit}
+                    onChange={(e) => setFormData({ ...formData, credit_limit: e.target.value })}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              )}
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {editingAccount ? 'Guardar' : 'Crear Cuenta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Accounts;

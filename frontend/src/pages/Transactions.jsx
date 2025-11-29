@@ -1,0 +1,321 @@
+import { useState, useEffect } from 'react';
+import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import {
+  ArrowLeftRight,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Plus,
+  X,
+  RefreshCw
+} from 'lucide-react';
+
+const Transactions = () => {
+  const { isSupervisor } = useAuth();
+  const [transactions, setTransactions] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [transactionType, setTransactionType] = useState('transfer');
+  const [formData, setFormData] = useState({
+    from_account_id: '',
+    to_account_id: '',
+    amount: '',
+    description: ''
+  });
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [transactionsRes, accountsRes] = await Promise.all([
+        api.get('/transactions/?limit=100'),
+        api.get('/accounts/')
+      ]);
+      setTransactions(transactionsRes.data);
+      setAccounts(accountsRes.data);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+
+    try {
+      const payload = {
+        amount: parseFloat(formData.amount),
+        description: formData.description
+      };
+
+      if (transactionType === 'transfer') {
+        payload.from_account_id = formData.from_account_id;
+        payload.to_account_id = formData.to_account_id;
+        await api.post('/transactions/transfer', payload);
+      } else if (transactionType === 'deposit') {
+        payload.to_account_id = formData.to_account_id;
+        await api.post('/transactions/deposit', payload);
+      } else {
+        payload.from_account_id = formData.from_account_id;
+        await api.post('/transactions/withdrawal', payload);
+      }
+
+      setShowModal(false);
+      setFormData({ from_account_id: '', to_account_id: '', amount: '', description: '' });
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Error al procesar la transacción');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formatCurrency = (amount, currency = 'EUR') => {
+    return new Intl.NumberFormat('es-ES', {
+      style: 'currency',
+      currency: currency,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getTransactionIcon = (type) => {
+    switch (type) {
+      case 'deposit':
+        return <ArrowDownLeft className="text-green" size={20} />;
+      case 'withdrawal':
+        return <ArrowUpRight className="text-red" size={20} />;
+      default:
+        return <RefreshCw className="text-blue" size={20} />;
+    }
+  };
+
+  const getTransactionLabel = (type) => {
+    switch (type) {
+      case 'deposit':
+        return 'Depósito';
+      case 'withdrawal':
+        return 'Retiro';
+      default:
+        return 'Transferencia';
+    }
+  };
+
+  const openModal = (type) => {
+    setTransactionType(type);
+    setFormData({ from_account_id: '', to_account_id: '', amount: '', description: '' });
+    setError('');
+    setShowModal(true);
+  };
+
+  // Filtrar cuentas que permiten transferencia
+  const transferableAccounts = accounts; // En un caso real filtrarías por can_transfer
+
+  if (loading) {
+    return <div className="loading-container"><p>Cargando...</p></div>;
+  }
+
+  return (
+    <div className="page">
+      <header className="page-header">
+        <div>
+          <h1>Transacciones</h1>
+          <p>Historial de movimientos</p>
+        </div>
+        <div className="header-actions">
+          <button className="btn btn-primary" onClick={() => openModal('transfer')}>
+            <ArrowLeftRight size={18} />
+            Transferir
+          </button>
+          {isSupervisor() && (
+            <>
+              <button className="btn btn-success" onClick={() => openModal('deposit')}>
+                <ArrowDownLeft size={18} />
+                Depositar
+              </button>
+              <button className="btn btn-danger" onClick={() => openModal('withdrawal')}>
+                <ArrowUpRight size={18} />
+                Retirar
+              </button>
+            </>
+          )}
+        </div>
+      </header>
+
+      <div className="card">
+        {transactions.length === 0 ? (
+          <div className="empty-state">
+            <ArrowLeftRight size={64} />
+            <h3>No hay transacciones</h3>
+            <p>Aún no se han realizado movimientos</p>
+          </div>
+        ) : (
+          <div className="transactions-table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Descripción</th>
+                  <th>Origen</th>
+                  <th>Destino</th>
+                  <th className="text-right">Monto</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((tx) => (
+                  <tr key={tx.id}>
+                    <td>
+                      <div className="transaction-type">
+                        {getTransactionIcon(tx.transaction_type)}
+                        <span>{getTransactionLabel(tx.transaction_type)}</span>
+                      </div>
+                    </td>
+                    <td>{tx.description || '-'}</td>
+                    <td>
+                      {tx.from_account ? (
+                        <div className="account-cell">
+                          <span className="account-name">{tx.from_account.name}</span>
+                          <span className="company-name">{tx.from_account.company?.name}</span>
+                        </div>
+                      ) : '-'}
+                    </td>
+                    <td>
+                      {tx.to_account ? (
+                        <div className="account-cell">
+                          <span className="account-name">{tx.to_account.name}</span>
+                          <span className="company-name">{tx.to_account.company?.name}</span>
+                        </div>
+                      ) : '-'}
+                    </td>
+                    <td className="text-right">
+                      <span className={`amount ${
+                        tx.transaction_type === 'deposit' ? 'positive' : 
+                        tx.transaction_type === 'withdrawal' ? 'negative' : ''
+                      }`}>
+                        {formatCurrency(tx.amount)}
+                      </span>
+                    </td>
+                    <td className="date-cell">{formatDate(tx.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>
+                {transactionType === 'transfer' && 'Nueva Transferencia'}
+                {transactionType === 'deposit' && 'Nuevo Depósito'}
+                {transactionType === 'withdrawal' && 'Nuevo Retiro'}
+              </h2>
+              <button className="btn btn-icon" onClick={() => setShowModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit}>
+              {error && <div className="error-message">{error}</div>}
+
+              {(transactionType === 'transfer' || transactionType === 'withdrawal') && (
+                <div className="form-group">
+                  <label htmlFor="from_account_id">Cuenta Origen</label>
+                  <select
+                    id="from_account_id"
+                    value={formData.from_account_id}
+                    onChange={(e) => setFormData({ ...formData, from_account_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Seleccionar cuenta</option>
+                    {transferableAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.company?.name} - {account.name} ({formatCurrency(account.balance, account.currency)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {(transactionType === 'transfer' || transactionType === 'deposit') && (
+                <div className="form-group">
+                  <label htmlFor="to_account_id">Cuenta Destino</label>
+                  <select
+                    id="to_account_id"
+                    value={formData.to_account_id}
+                    onChange={(e) => setFormData({ ...formData, to_account_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Seleccionar cuenta</option>
+                    {accounts
+                      .filter(a => a.id !== formData.from_account_id)
+                      .map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.company?.name} - {account.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="amount">Monto</label>
+                <input
+                  type="number"
+                  id="amount"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  placeholder="0.00"
+                  min="0.01"
+                  step="0.01"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="description">Descripción (opcional)</label>
+                <input
+                  type="text"
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Concepto de la operación"
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? 'Procesando...' : 'Confirmar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Transactions;

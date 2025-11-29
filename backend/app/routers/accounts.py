@@ -1,0 +1,167 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session, joinedload
+from typing import List
+from uuid import UUID
+from decimal import Decimal
+
+from app.database import get_db
+from app.models import User, Company, Account, AccountPermission, Transaction
+from app.schemas import AccountCreate, AccountUpdate, AccountResponse, AccountWithCompany
+from app.auth import get_current_user, get_current_supervisor, check_account_permission
+
+router = APIRouter(prefix="/api/accounts", tags=["Cuentas"])
+
+
+@router.post("/", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
+def create_account(
+    account_data: AccountCreate,
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """Crear una nueva cuenta (solo supervisores)."""
+    # Verificar que la empresa existe
+    company = db.query(Company).filter(
+        Company.id == account_data.company_id,
+        Company.is_active == True
+    ).first()
+    
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Empresa no encontrada"
+        )
+    
+    # Validar tipo de cuenta
+    if account_data.account_type not in ["corriente", "credito", "confirming"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tipo de cuenta inválido"
+        )
+    
+    # Para crédito y confirming, el balance inicial debe ser 0 o negativo
+    initial_balance = account_data.initial_balance
+    if account_data.account_type in ["credito", "confirming"]:
+        if initial_balance > 0:
+            initial_balance = Decimal("0.00")
+    
+    account = Account(
+        company_id=account_data.company_id,
+        name=account_data.name,
+        account_type=account_data.account_type,
+        currency=account_data.currency,
+        balance=initial_balance,
+        credit_limit=account_data.credit_limit
+    )
+    
+    db.add(account)
+    db.commit()
+    db.refresh(account)
+    
+    return account
+
+
+@router.get("/", response_model=List[AccountWithCompany])
+def list_accounts(
+    company_id: UUID = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Listar cuentas. Supervisores ven todas, usuarios solo las permitidas."""
+    query = db.query(Account).filter(Account.is_active == True).options(
+        joinedload(Account.company)
+    )
+    
+    if company_id:
+        query = query.filter(Account.company_id == company_id)
+    
+    if current_user.role == "supervisor":
+        accounts = query.all()
+    else:
+        # Filtrar solo cuentas con permiso
+        permitted_account_ids = db.query(AccountPermission.account_id).filter(
+            AccountPermission.user_id == current_user.id,
+            AccountPermission.can_view == True
+        ).subquery()
+        
+        accounts = query.filter(Account.id.in_(permitted_account_ids)).all()
+    
+    return accounts
+
+
+@router.get("/{account_id}", response_model=AccountWithCompany)
+def get_account(
+    account_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Obtener una cuenta específica."""
+    account = db.query(Account).filter(
+        Account.id == account_id,
+        Account.is_active == True
+    ).options(joinedload(Account.company)).first()
+    
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cuenta no encontrada"
+        )
+    
+    if not check_account_permission(db, current_user, account_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para ver esta cuenta"
+        )
+    
+    return account
+
+
+@router.patch("/{account_id}", response_model=AccountResponse)
+def update_account(
+    account_id: UUID,
+    account_data: AccountUpdate,
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """Actualizar una cuenta (solo supervisores)."""
+    account = db.query(Account).filter(Account.id == account_id).first()
+    
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cuenta no encontrada"
+        )
+    
+    update_data = account_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(account, field, value)
+    
+    db.commit()
+    db.refresh(account)
+    
+    return account
+
+
+@router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(
+    account_id: UUID,
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """Desactivar una cuenta (solo supervisores)."""
+    account = db.query(Account).filter(Account.id == account_id).first()
+    
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cuenta no encontrada"
+        )
+    
+    # Verificar que no tiene saldo
+    if account.balance > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede desactivar una cuenta con saldo positivo"
+        )
+    
+    account.is_active = False
+    db.commit()
