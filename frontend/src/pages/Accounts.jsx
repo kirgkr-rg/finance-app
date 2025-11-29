@@ -55,16 +55,19 @@ const Accounts = () => {
         }
         await api.patch(`/accounts/${editingAccount.id}`, updateData);
       } else {
-        const createData = {
-          ...formData,
-          initial_balance: parseFloat(formData.initial_balance),
-          credit_limit: parseFloat(formData.credit_limit)
-        };
-        if (formData.initial_available !== '') {
-          createData.initial_available = parseFloat(formData.initial_available);
-        }
-        await api.post('/accounts/', createData);
-      }
+  const createData = {
+    name: formData.name,
+    company_id: formData.company_id,
+    account_type: formData.account_type,
+    currency: formData.currency,
+    initial_balance: parseFloat(formData.initial_balance) || 0,
+    credit_limit: parseFloat(formData.credit_limit) || 0
+  };
+  if (formData.initial_available !== '' && formData.initial_available !== null) {
+    createData.initial_available = parseFloat(formData.initial_available);
+  }
+  await api.post('/accounts/', createData);
+}
       setShowModal(false);
       setEditingAccount(null);
       setFormData({ name: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0', initial_available: '' });
