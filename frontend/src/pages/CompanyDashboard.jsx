@@ -82,19 +82,24 @@ const CompanyDashboard = () => {
         totals.corriente.saldo += balance;
         totals.corriente.disponible += available;
         totals.corriente.count++;
+        // Para corriente, sumar balance al total
+        totals.total.saldo += balance;
       } else if (acc.account_type === 'credito') {
         totals.credito.saldo += balance;
         totals.credito.disponible += available;
         totals.credito.limite += limit;
         totals.credito.count++;
+        // Para crédito, sumar disponible al total
+        totals.total.saldo += available;
       } else if (acc.account_type === 'confirming') {
         totals.confirming.saldo += balance;
         totals.confirming.disponible += available;
         totals.confirming.limite += limit;
         totals.confirming.count++;
+        // Para confirming, sumar disponible al total
+        totals.total.saldo += available;
       }
 
-      totals.total.saldo += balance;
       totals.total.disponible += available;
     });
 

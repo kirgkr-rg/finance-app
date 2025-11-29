@@ -37,10 +37,15 @@ const Dashboard = () => {
     }
   };
 
-  const totalBalance = accounts.reduce(
-    (sum, acc) => sum + parseFloat(acc.balance),
-    0
-  );
+  // Balance total: corrientes suman balance, crédito/confirming suman disponible
+  const totalBalance = accounts.reduce((sum, acc) => {
+    if (acc.account_type === 'corriente') {
+      return sum + parseFloat(acc.balance);
+    } else {
+      // Para crédito y confirming, sumar el disponible
+      return sum + parseFloat(acc.available);
+    }
+  }, 0);
 
   const formatCurrency = (amount, currency = 'EUR') => {
     return new Intl.NumberFormat('es-ES', {
