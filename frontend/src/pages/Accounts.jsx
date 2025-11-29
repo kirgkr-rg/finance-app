@@ -70,7 +70,15 @@ const Accounts = () => {
       setFormData({ name: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0', initial_available: '' });
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error al guardar cuenta');
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        // Error de validación de Pydantic
+        setError(detail.map(e => e.msg).join(', '));
+      } else if (typeof detail === 'string') {
+        setError(detail);
+      } else {
+        setError('Error al guardar cuenta');
+      }
     }
   };
 
