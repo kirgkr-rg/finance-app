@@ -524,7 +524,7 @@ const CompanyDashboard = () => {
       {/* Modal de Transacciones de Cuenta */}
       {selectedAccount && (
         <div className="modal-overlay" onClick={closeAccountModal}>
-          <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal-xlarge" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h2>{selectedAccount.name}</h2>
@@ -557,13 +557,12 @@ const CompanyDashboard = () => {
                   <table className="table">
                     <thead>
                       <tr>
+                        <th>Fecha</th>
                         <th>Tipo</th>
                         <th>Descripción</th>
-                        <th>Origen</th>
-                        <th>Destino</th>
+                        <th>Origen / Destino</th>
                         <th className="text-right">Monto</th>
                         <th className="text-right">Saldo</th>
-                        <th>Fecha</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -571,8 +570,10 @@ const CompanyDashboard = () => {
                       {accountTransactions.map((tx) => {
                         const isOutgoing = tx.from_account_id === selectedAccount.id;
                         const balanceAfter = isOutgoing ? tx.from_balance_after : tx.to_balance_after;
+                        const otherAccount = isOutgoing ? tx.to_account : tx.from_account;
                         return (
                           <tr key={tx.id}>
+                            <td className="date-cell">{formatDate(tx.created_at)}</td>
                             <td>
                               <div className="transaction-type">
                                 {getTransactionIcon(tx.transaction_type)}
@@ -581,18 +582,10 @@ const CompanyDashboard = () => {
                             </td>
                             <td>{tx.description || '-'}</td>
                             <td>
-                              {tx.from_account ? (
+                              {otherAccount ? (
                                 <div className="account-cell">
-                                  <span className="account-name">{tx.from_account.name}</span>
-                                  <span className="company-name">{tx.from_account.company?.name}</span>
-                                </div>
-                              ) : '-'}
-                            </td>
-                            <td>
-                              {tx.to_account ? (
-                                <div className="account-cell">
-                                  <span className="account-name">{tx.to_account.name}</span>
-                                  <span className="company-name">{tx.to_account.company?.name}</span>
+                                  <span className="account-name">{otherAccount.name}</span>
+                                  <span className="company-name">{otherAccount.company?.name}</span>
                                 </div>
                               ) : '-'}
                             </td>
@@ -608,7 +601,6 @@ const CompanyDashboard = () => {
                                 </span>
                               ) : '-'}
                             </td>
-                            <td className="date-cell">{formatDate(tx.created_at)}</td>
                             <td>
                               <button 
                                 className="btn btn-icon btn-sm" 

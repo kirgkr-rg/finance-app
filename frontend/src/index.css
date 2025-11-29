@@ -1050,6 +1050,11 @@ body {
   width: 90%;
 }
 
+.modal-xlarge {
+  max-width: 1000px;
+  width: 95%;
+}
+
 .flow-content {
   padding: 1.5rem;
 }
