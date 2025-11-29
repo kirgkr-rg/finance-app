@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Groups from './pages/Groups';
 import Companies from './pages/Companies';
 import CompanyDashboard from './pages/CompanyDashboard';
 import Accounts from './pages/Accounts';
@@ -71,6 +72,14 @@ function App() {
             element={
               <PrivateRoute>
                 <Dashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/groups"
+            element={
+              <PrivateRoute requireSupervisor>
+                <Groups />
               </PrivateRoute>
             }
           />

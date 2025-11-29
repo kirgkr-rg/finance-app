@@ -2,25 +2,30 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Building2, Plus, Edit, Trash2, X, Eye } from 'lucide-react';
+import { Building2, Plus, Edit, Trash2, X, Eye, FolderTree } from 'lucide-react';
 
 const Companies = () => {
   const { isSupervisor } = useAuth();
   const [companies, setCompanies] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingCompany, setEditingCompany] = useState(null);
-  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', group_id: '' });
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchCompanies();
+    fetchData();
   }, []);
 
-  const fetchCompanies = async () => {
+  const fetchData = async () => {
     try {
-      const response = await api.get('/companies/');
-      setCompanies(response.data);
+      const [companiesRes, groupsRes] = await Promise.all([
+        api.get('/companies/'),
+        api.get('/groups/')
+      ]);
+      setCompanies(companiesRes.data);
+      setGroups(groupsRes.data);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -33,23 +38,40 @@ const Companies = () => {
     setError('');
 
     try {
+      const dataToSend = {
+        name: formData.name,
+        description: formData.description,
+        group_id: formData.group_id || null
+      };
+      
       if (editingCompany) {
-        await api.patch(`/companies/${editingCompany.id}`, formData);
+        await api.patch(`/companies/${editingCompany.id}`, dataToSend);
       } else {
-        await api.post('/companies/', formData);
+        await api.post('/companies/', dataToSend);
       }
       setShowModal(false);
-      setFormData({ name: '', description: '' });
+      setFormData({ name: '', description: '', group_id: '' });
       setEditingCompany(null);
-      fetchCompanies();
+      fetchData();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error al guardar');
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map(e => e.msg).join(', '));
+      } else if (typeof detail === 'string') {
+        setError(detail);
+      } else {
+        setError('Error al guardar');
+      }
     }
   };
 
   const handleEdit = (company) => {
     setEditingCompany(company);
-    setFormData({ name: company.name, description: company.description || '' });
+    setFormData({ 
+      name: company.name, 
+      description: company.description || '',
+      group_id: company.group_id || ''
+    });
     setShowModal(true);
   };
 
@@ -58,7 +80,7 @@ const Companies = () => {
 
     try {
       await api.delete(`/companies/${id}`);
-      fetchCompanies();
+      fetchData();
     } catch (err) {
       alert(err.response?.data?.detail || 'Error al eliminar');
     }
@@ -66,8 +88,13 @@ const Companies = () => {
 
   const openNewModal = () => {
     setEditingCompany(null);
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '', description: '', group_id: '' });
     setShowModal(true);
+  };
+
+  const getGroupName = (groupId) => {
+    const group = groups.find(g => g.id === groupId);
+    return group ? group.name : null;
   };
 
   if (loading) {
@@ -103,6 +130,12 @@ const Companies = () => {
                 <Building2 size={24} />
                 <h3>{company.name}</h3>
               </div>
+              {company.group_id && (
+                <div className="company-group">
+                  <FolderTree size={14} />
+                  <span>{getGroupName(company.group_id)}</span>
+                </div>
+              )}
               {company.description && (
                 <p className="company-description">{company.description}</p>
               )}
@@ -151,6 +184,20 @@ const Companies = () => {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
                 />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="group_id">Grupo (opcional)</label>
+                <select
+                  id="group_id"
+                  value={formData.group_id}
+                  onChange={(e) => setFormData({ ...formData, group_id: e.target.value })}
+                >
+                  <option value="">Sin grupo</option>
+                  {groups.map((group) => (
+                    <option key={group.id} value={group.id}>{group.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="form-group">
