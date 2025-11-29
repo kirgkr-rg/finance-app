@@ -147,7 +147,10 @@ const Dashboard = () => {
                     <span className="account-company">{account.company?.name}</span>
                   </div>
                   <span className="account-balance">
-                    {formatCurrency(account.balance, account.currency)}
+                    {account.account_type === 'corriente' 
+                      ? formatCurrency(account.balance, account.currency)
+                      : formatCurrency(account.available, account.currency)
+                    }
                   </span>
                 </div>
               ))
