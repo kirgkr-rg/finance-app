@@ -1545,3 +1545,36 @@ body {
   font-size: 0.9rem;
   color: var(--text-secondary);
 }
+
+/* Clickable table row */
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.clickable-row:hover {
+  background-color: rgba(99, 102, 241, 0.1);
+}
+
+/* Modal subtitle */
+.modal-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  display: block;
+}
+
+/* Modal body */
+.modal-body {
+  padding: 1rem 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.modal-body .loading-container {
+  padding: 2rem;
+}
+
+.modal-body .empty-state {
+  padding: 2rem;
+}

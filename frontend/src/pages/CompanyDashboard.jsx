@@ -9,7 +9,11 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowLeft,
-  RefreshCw
+  RefreshCw,
+  X,
+  ArrowUpRight,
+  ArrowDownLeft,
+  RotateCcw
 } from 'lucide-react';
 
 const CompanyDashboard = () => {
@@ -18,6 +22,9 @@ const CompanyDashboard = () => {
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [accountTransactions, setAccountTransactions] = useState([]);
+  const [loadingAccountTx, setLoadingAccountTx] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -104,6 +111,51 @@ const CompanyDashboard = () => {
     });
 
     return totals;
+  };
+
+  const viewAccountTransactions = async (account) => {
+    setSelectedAccount(account);
+    setLoadingAccountTx(true);
+    try {
+      const response = await api.get(`/transactions/?account_id=${account.id}&limit=50`);
+      setAccountTransactions(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+      setAccountTransactions([]);
+    } finally {
+      setLoadingAccountTx(false);
+    }
+  };
+
+  const closeAccountModal = () => {
+    setSelectedAccount(null);
+    setAccountTransactions([]);
+  };
+
+  const getTransactionIcon = (type) => {
+    switch (type) {
+      case 'deposit':
+        return <ArrowDownLeft className="text-green" size={18} />;
+      case 'withdrawal':
+        return <ArrowUpRight className="text-red" size={18} />;
+      case 'confirming_settlement':
+        return <RotateCcw className="text-purple" size={18} />;
+      default:
+        return <RefreshCw className="text-blue" size={18} />;
+    }
+  };
+
+  const getTransactionLabel = (type) => {
+    switch (type) {
+      case 'deposit':
+        return 'Depósito';
+      case 'withdrawal':
+        return 'Retiro';
+      case 'confirming_settlement':
+        return 'Vto. Confirming';
+      default:
+        return 'Transferencia';
+    }
   };
 
   if (loading) {
@@ -274,7 +326,7 @@ const CompanyDashboard = () => {
               </thead>
               <tbody>
                 {accounts.map((account) => (
-                  <tr key={account.id}>
+                  <tr key={account.id} onClick={() => viewAccountTransactions(account)} className="clickable-row">
                     <td>
                       <div className="account-name-cell">
                         {account.account_type === 'corriente' && <Wallet size={18} />}
@@ -360,6 +412,96 @@ const CompanyDashboard = () => {
           </div>
         )}
       </section>
+
+      {/* Modal de Transacciones de Cuenta */}
+      {selectedAccount && (
+        <div className="modal-overlay" onClick={closeAccountModal}>
+          <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>{selectedAccount.name}</h2>
+                <span className="modal-subtitle">
+                  {selectedAccount.account_type === 'corriente' && 'Cuenta Corriente'}
+                  {selectedAccount.account_type === 'credito' && 'Línea de Crédito'}
+                  {selectedAccount.account_type === 'confirming' && 'Confirming'}
+                  {' • '}Saldo: {formatCurrency(selectedAccount.balance)} 
+                  {' • '}Disponible: {formatCurrency(selectedAccount.available)}
+                </span>
+              </div>
+              <button className="btn btn-icon" onClick={closeAccountModal}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {loadingAccountTx ? (
+                <div className="loading-container">
+                  <RefreshCw className="spin" size={32} />
+                  <p>Cargando transacciones...</p>
+                </div>
+              ) : accountTransactions.length === 0 ? (
+                <div className="empty-state">
+                  <Wallet size={48} />
+                  <h3>Sin movimientos</h3>
+                  <p>Esta cuenta no tiene transacciones</p>
+                </div>
+              ) : (
+                <div className="transactions-table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th>Descripción</th>
+                        <th>Origen</th>
+                        <th>Destino</th>
+                        <th className="text-right">Monto</th>
+                        <th>Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accountTransactions.map((tx) => {
+                        const isOutgoing = tx.from_account_id === selectedAccount.id;
+                        return (
+                          <tr key={tx.id}>
+                            <td>
+                              <div className="transaction-type">
+                                {getTransactionIcon(tx.transaction_type)}
+                                <span>{getTransactionLabel(tx.transaction_type)}</span>
+                              </div>
+                            </td>
+                            <td>{tx.description || '-'}</td>
+                            <td>
+                              {tx.from_account ? (
+                                <div className="account-cell">
+                                  <span className="account-name">{tx.from_account.name}</span>
+                                  <span className="company-name">{tx.from_account.company?.name}</span>
+                                </div>
+                              ) : '-'}
+                            </td>
+                            <td>
+                              {tx.to_account ? (
+                                <div className="account-cell">
+                                  <span className="account-name">{tx.to_account.name}</span>
+                                  <span className="company-name">{tx.to_account.company?.name}</span>
+                                </div>
+                              ) : '-'}
+                            </td>
+                            <td className="text-right">
+                              <span className={`amount ${isOutgoing ? 'negative' : 'positive'}`}>
+                                {isOutgoing ? '-' : '+'}{formatCurrency(tx.amount)}
+                              </span>
+                            </td>
+                            <td className="date-cell">{formatDate(tx.created_at)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
