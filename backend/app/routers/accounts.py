@@ -38,10 +38,20 @@ def create_account(
             detail="Tipo de cuenta inválido"
         )
     
-    # Para crédito y confirming, el balance inicial debe ser 0 o negativo
+    # Calcular balance inicial según tipo de cuenta
     initial_balance = account_data.initial_balance
+    
     if account_data.account_type in ["credito", "confirming"]:
-        if initial_balance > 0:
+        # Si se especifica disponible inicial, calcular el balance (usado)
+        if account_data.initial_available is not None:
+            if account_data.initial_available > account_data.credit_limit:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El disponible no puede ser mayor que el límite"
+                )
+            # Balance = disponible - límite (será negativo o 0)
+            initial_balance = account_data.initial_available - account_data.credit_limit
+        else:
             initial_balance = Decimal("0.00")
     
     account = Account(
@@ -132,6 +142,22 @@ def update_account(
         )
     
     update_data = account_data.model_dump(exclude_unset=True)
+    
+    # Si se actualiza el disponible para crédito/confirming
+    if "initial_available" in update_data and account.account_type in ["credito", "confirming"]:
+        new_available = update_data.pop("initial_available")
+        credit_limit = update_data.get("credit_limit", account.credit_limit)
+        
+        if new_available > credit_limit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El disponible no puede ser mayor que el límite"
+            )
+        # Balance = disponible - límite
+        account.balance = new_available - credit_limit
+    elif "initial_available" in update_data:
+        update_data.pop("initial_available")  # Ignorar para cuentas corrientes
+    
     for field, value in update_data.items():
         setattr(account, field, value)
     

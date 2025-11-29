@@ -16,7 +16,8 @@ const Accounts = () => {
     account_type: 'corriente',
     currency: 'EUR',
     initial_balance: '0',
-    credit_limit: '0'
+    credit_limit: '0',
+    initial_available: ''
   });
   const [error, setError] = useState('');
 
@@ -45,20 +46,28 @@ const Accounts = () => {
 
     try {
       if (editingAccount) {
-        await api.patch(`/accounts/${editingAccount.id}`, {
+        const updateData = {
           name: formData.name,
           credit_limit: parseFloat(formData.credit_limit)
-        });
+        };
+        if (formData.initial_available !== '') {
+          updateData.initial_available = parseFloat(formData.initial_available);
+        }
+        await api.patch(`/accounts/${editingAccount.id}`, updateData);
       } else {
-        await api.post('/accounts/', {
+        const createData = {
           ...formData,
           initial_balance: parseFloat(formData.initial_balance),
           credit_limit: parseFloat(formData.credit_limit)
-        });
+        };
+        if (formData.initial_available !== '') {
+          createData.initial_available = parseFloat(formData.initial_available);
+        }
+        await api.post('/accounts/', createData);
       }
       setShowModal(false);
       setEditingAccount(null);
-      setFormData({ name: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0' });
+      setFormData({ name: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0', initial_available: '' });
       fetchData();
     } catch (err) {
       setError(err.response?.data?.detail || 'Error al guardar cuenta');
@@ -73,7 +82,8 @@ const Accounts = () => {
       account_type: account.account_type,
       currency: account.currency,
       initial_balance: '0',
-      credit_limit: account.credit_limit || '0'
+      credit_limit: account.credit_limit || '0',
+      initial_available: account.available || ''
     });
     setShowModal(true);
   };
@@ -96,7 +106,7 @@ const Accounts = () => {
 
   const openNewModal = () => {
     setEditingAccount(null);
-    setFormData({ name: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0' });
+    setFormData({ name: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0', initial_available: '' });
     setShowModal(true);
   };
 
@@ -303,38 +313,67 @@ const Accounts = () => {
                   </div>
 
                   {(formData.account_type === 'credito' || formData.account_type === 'confirming') && (
-                    <div className="form-group">
-                      <label htmlFor="credit_limit">
-                        {formData.account_type === 'credito' ? 'Límite de Crédito' : 'Límite Concedido'}
-                      </label>
-                      <input
-                        type="number"
-                        id="credit_limit"
-                        value={formData.credit_limit}
-                        onChange={(e) => setFormData({ ...formData, credit_limit: e.target.value })}
-                        min="0"
-                        step="0.01"
-                        required
-                      />
-                    </div>
+                    <>
+                      <div className="form-group">
+                        <label htmlFor="credit_limit">
+                          {formData.account_type === 'credito' ? 'Límite de Crédito' : 'Límite Concedido'}
+                        </label>
+                        <input
+                          type="number"
+                          id="credit_limit"
+                          value={formData.credit_limit}
+                          onChange={(e) => setFormData({ ...formData, credit_limit: e.target.value })}
+                          min="0"
+                          step="0.01"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="initial_available">
+                          Disponible Inicial (opcional)
+                        </label>
+                        <input
+                          type="number"
+                          id="initial_available"
+                          value={formData.initial_available}
+                          onChange={(e) => setFormData({ ...formData, initial_available: e.target.value })}
+                          min="0"
+                          step="0.01"
+                          placeholder="Dejar vacío = igual al límite"
+                        />
+                      </div>
+                    </>
                   )}
                 </>
               )}
 
               {editingAccount && (editingAccount.account_type === 'credito' || editingAccount.account_type === 'confirming') && (
-                <div className="form-group">
-                  <label htmlFor="credit_limit">
-                    {editingAccount.account_type === 'credito' ? 'Límite de Crédito' : 'Límite Concedido'}
-                  </label>
-                  <input
-                    type="number"
-                    id="credit_limit"
-                    value={formData.credit_limit}
-                    onChange={(e) => setFormData({ ...formData, credit_limit: e.target.value })}
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
+                <>
+                  <div className="form-group">
+                    <label htmlFor="credit_limit">
+                      {editingAccount.account_type === 'credito' ? 'Límite de Crédito' : 'Límite Concedido'}
+                    </label>
+                    <input
+                      type="number"
+                      id="credit_limit"
+                      value={formData.credit_limit}
+                      onChange={(e) => setFormData({ ...formData, credit_limit: e.target.value })}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="initial_available">Disponible Actual</label>
+                    <input
+                      type="number"
+                      id="initial_available"
+                      value={formData.initial_available}
+                      onChange={(e) => setFormData({ ...formData, initial_available: e.target.value })}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </>
               )}
 
               <div className="modal-actions">

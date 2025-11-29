@@ -91,11 +91,13 @@ class AccountCreate(AccountBase):
     company_id: UUID
     initial_balance: Decimal = Decimal("0.00")
     credit_limit: Decimal = Decimal("0.00")
+    initial_available: Optional[Decimal] = None  # Para confirming/crédito
 
 
 class AccountUpdate(BaseModel):
     name: Optional[str] = None
     credit_limit: Optional[Decimal] = None
+    initial_available: Optional[Decimal] = None  # Para ajustar el disponible
     is_active: Optional[bool] = None
 
 
