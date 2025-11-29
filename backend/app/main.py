@@ -13,7 +13,8 @@ from app.routers import (
     accounts_router,
     permissions_router,
     transactions_router,
-    operations_router
+    operations_router,
+    attachments_router
 )
 
 settings = get_settings()
@@ -54,6 +55,7 @@ app.include_router(accounts_router)
 app.include_router(permissions_router)
 app.include_router(transactions_router)
 app.include_router(operations_router)
+app.include_router(attachments_router)
 
 
 @app.get("/")

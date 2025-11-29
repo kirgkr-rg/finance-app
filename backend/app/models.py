@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Numeric, CheckConstraint
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Numeric, CheckConstraint, Integer, LargeBinary
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -159,9 +159,27 @@ class Transaction(Base):
     to_account = relationship("Account", back_populates="incoming_transactions", foreign_keys=[to_account_id])
     operation = relationship("Operation", back_populates="transactions")
     creator = relationship("User")
+    attachments = relationship("Attachment", back_populates="transaction", cascade="all, delete-orphan")
     
     __table_args__ = (
         CheckConstraint("amount > 0", name="positive_amount"),
         CheckConstraint("transaction_type IN ('transfer', 'deposit', 'withdrawal', 'confirming_settlement')", name="valid_transaction_type"),
         CheckConstraint("status IN ('pending', 'completed', 'failed', 'cancelled')", name="valid_status"),
     )
+
+
+class Attachment(Base):
+    __tablename__ = "attachments"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    transaction_id = Column(UUID(as_uuid=True), ForeignKey("transactions.id", ondelete="CASCADE"), nullable=False)
+    filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=False)
+    file_data = Column(LargeBinary, nullable=False)  # Archivo en binario
+    file_size = Column(Integer, nullable=False)
+    uploaded_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relaciones
+    transaction = relationship("Transaction", back_populates="attachments")
+    uploader = relationship("User")

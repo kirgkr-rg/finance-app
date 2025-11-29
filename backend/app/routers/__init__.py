@@ -6,6 +6,7 @@ from app.routers.accounts import router as accounts_router
 from app.routers.permissions import router as permissions_router
 from app.routers.transactions import router as transactions_router
 from app.routers.operations import router as operations_router
+from app.routers.attachments import router as attachments_router
 
 __all__ = [
     "auth_router",
@@ -15,5 +16,6 @@ __all__ = [
     "accounts_router",
     "permissions_router",
     "transactions_router",
-    "operations_router"
+    "operations_router",
+    "attachments_router"
 ]

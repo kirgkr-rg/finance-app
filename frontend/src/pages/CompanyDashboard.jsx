@@ -13,7 +13,12 @@ import {
   X,
   ArrowUpRight,
   ArrowDownLeft,
-  RotateCcw
+  RotateCcw,
+  Paperclip,
+  Upload,
+  Download,
+  Trash2,
+  FileText
 } from 'lucide-react';
 
 const CompanyDashboard = () => {
@@ -25,6 +30,10 @@ const CompanyDashboard = () => {
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [accountTransactions, setAccountTransactions] = useState([]);
   const [loadingAccountTx, setLoadingAccountTx] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [attachments, setAttachments] = useState([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -130,6 +139,90 @@ const CompanyDashboard = () => {
   const closeAccountModal = () => {
     setSelectedAccount(null);
     setAccountTransactions([]);
+  };
+
+  const viewTransactionAttachments = async (transaction) => {
+    setSelectedTransaction(transaction);
+    setLoadingAttachments(true);
+    try {
+      const response = await api.get(`/attachments/transaction/${transaction.id}`);
+      setAttachments(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+      setAttachments([]);
+    } finally {
+      setLoadingAttachments(false);
+    }
+  };
+
+  const closeAttachmentsModal = () => {
+    setSelectedTransaction(null);
+    setAttachments([]);
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('El archivo es demasiado grande. Máximo: 5MB');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      await api.post(`/attachments/transaction/${selectedTransaction.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      // Recargar adjuntos
+      const response = await api.get(`/attachments/transaction/${selectedTransaction.id}`);
+      setAttachments(response.data);
+    } catch (error) {
+      alert(error.response?.data?.detail || 'Error al subir archivo');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const downloadAttachment = async (attachment) => {
+    try {
+      const response = await api.get(`/attachments/${attachment.id}/download`, {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', attachment.filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert('Error al descargar archivo');
+    }
+  };
+
+  const deleteAttachment = async (attachment) => {
+    if (!confirm(`¿Eliminar ${attachment.filename}?`)) return;
+
+    try {
+      await api.delete(`/attachments/${attachment.id}`);
+      setAttachments(attachments.filter(a => a.id !== attachment.id));
+    } catch (error) {
+      alert(error.response?.data?.detail || 'Error al eliminar archivo');
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   const getTransactionIcon = (type) => {
@@ -456,6 +549,7 @@ const CompanyDashboard = () => {
                         <th className="text-right">Monto</th>
                         <th className="text-right">Saldo</th>
                         <th>Fecha</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -500,11 +594,100 @@ const CompanyDashboard = () => {
                               ) : '-'}
                             </td>
                             <td className="date-cell">{formatDate(tx.created_at)}</td>
+                            <td>
+                              <button 
+                                className="btn btn-icon btn-sm" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  viewTransactionAttachments(tx);
+                                }}
+                                title="Ver adjuntos"
+                              >
+                                <Paperclip size={16} />
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de Adjuntos */}
+      {selectedTransaction && (
+        <div className="modal-overlay" onClick={closeAttachmentsModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>Adjuntos</h2>
+                <span className="modal-subtitle">
+                  {selectedTransaction.description || 'Transacción'} - {formatCurrency(selectedTransaction.amount)}
+                </span>
+              </div>
+              <button className="btn btn-icon" onClick={closeAttachmentsModal}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {/* Botón subir */}
+              <div className="upload-section">
+                <label className="btn btn-primary upload-btn">
+                  <Upload size={18} />
+                  {uploading ? 'Subiendo...' : 'Subir archivo'}
+                  <input 
+                    type="file" 
+                    onChange={handleFileUpload} 
+                    disabled={uploading}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+                <span className="upload-hint">Máximo 5MB por archivo</span>
+              </div>
+
+              {/* Lista de adjuntos */}
+              {loadingAttachments ? (
+                <div className="loading-container">
+                  <RefreshCw className="spin" size={24} />
+                  <p>Cargando...</p>
+                </div>
+              ) : attachments.length === 0 ? (
+                <div className="empty-state small">
+                  <Paperclip size={32} />
+                  <p>No hay adjuntos</p>
+                </div>
+              ) : (
+                <div className="attachments-list">
+                  {attachments.map((att) => (
+                    <div key={att.id} className="attachment-item">
+                      <div className="attachment-icon">
+                        <FileText size={24} />
+                      </div>
+                      <div className="attachment-info">
+                        <span className="attachment-name">{att.filename}</span>
+                        <span className="attachment-size">{formatFileSize(att.file_size)}</span>
+                      </div>
+                      <div className="attachment-actions">
+                        <button 
+                          className="btn btn-icon btn-sm" 
+                          onClick={() => downloadAttachment(att)}
+                          title="Descargar"
+                        >
+                          <Download size={16} />
+                        </button>
+                        <button 
+                          className="btn btn-icon btn-sm danger" 
+                          onClick={() => deleteAttachment(att)}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
