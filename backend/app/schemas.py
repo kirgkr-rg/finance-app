@@ -48,11 +48,38 @@ class TokenData(BaseModel):
     user_id: Optional[UUID] = None
 
 
+# ============ GROUP SCHEMAS ============
+
+class GroupBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class GroupCreate(GroupBase):
+    pass
+
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class GroupResponse(GroupBase):
+    id: UUID
+    is_active: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
 # ============ COMPANY SCHEMAS ============
 
 class CompanyBase(BaseModel):
     name: str
     description: Optional[str] = None
+    group_id: Optional[UUID] = None
 
 
 class CompanyCreate(CompanyBase):
@@ -62,6 +89,7 @@ class CompanyCreate(CompanyBase):
 class CompanyUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    group_id: Optional[UUID] = None
     is_active: Optional[bool] = None
 
 
@@ -73,6 +101,10 @@ class CompanyResponse(CompanyBase):
     
     class Config:
         from_attributes = True
+
+
+class CompanyWithGroup(CompanyResponse):
+    group: Optional[GroupResponse] = None
 
 
 class CompanyWithAccounts(CompanyResponse):
@@ -197,10 +229,18 @@ class OperationFlowEdge(BaseModel):
     created_at: datetime
 
 
+class OperationGroupNode(BaseModel):
+    group_id: Optional[UUID]
+    group_name: str
+    total_in: Decimal
+    total_out: Decimal
+
+
 class OperationFlowMap(BaseModel):
     operation: OperationResponse
     nodes: List[OperationFlowNode]
     edges: List[OperationFlowEdge]
+    group_nodes: List[OperationGroupNode] = []
 
 
 # ============ TRANSACTION SCHEMAS ============

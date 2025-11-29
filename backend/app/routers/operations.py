@@ -10,7 +10,8 @@ from app.database import get_db
 from app.models import User, Operation, Transaction, Account
 from app.schemas import (
     OperationCreate, OperationUpdate, OperationResponse,
-    OperationWithTransactions, OperationFlowMap, OperationFlowNode, OperationFlowEdge
+    OperationWithTransactions, OperationFlowMap, OperationFlowNode, OperationFlowEdge,
+    OperationGroupNode
 )
 from app.auth import get_current_supervisor
 
@@ -85,6 +86,8 @@ def get_operation_flow(
     db: Session = Depends(get_db)
 ):
     """Obtener el mapa de flujo de una operación."""
+    from app.models import Company
+    
     operation = db.query(Operation).filter(
         Operation.id == operation_id
     ).options(
@@ -99,7 +102,7 @@ def get_operation_flow(
         )
     
     # Calcular nodos (empresas involucradas)
-    company_flows = defaultdict(lambda: {"in": Decimal("0"), "out": Decimal("0"), "name": ""})
+    company_flows = defaultdict(lambda: {"in": Decimal("0"), "out": Decimal("0"), "name": "", "group_id": None, "group_name": ""})
     
     edges = []
     
@@ -110,9 +113,13 @@ def get_operation_flow(
             
             company_flows[from_company.id]["out"] += tx.amount
             company_flows[from_company.id]["name"] = from_company.name
+            company_flows[from_company.id]["group_id"] = from_company.group_id
+            company_flows[from_company.id]["group_name"] = from_company.group.name if from_company.group else "Sin grupo"
             
             company_flows[to_company.id]["in"] += tx.amount
             company_flows[to_company.id]["name"] = to_company.name
+            company_flows[to_company.id]["group_id"] = to_company.group_id
+            company_flows[to_company.id]["group_name"] = to_company.group.name if to_company.group else "Sin grupo"
             
             edges.append(OperationFlowEdge(
                 from_company_id=from_company.id,
@@ -134,10 +141,29 @@ def get_operation_flow(
         for company_id, data in company_flows.items()
     ]
     
+    # Calcular resumen por grupos
+    group_flows = defaultdict(lambda: {"in": Decimal("0"), "out": Decimal("0"), "name": ""})
+    for company_id, data in company_flows.items():
+        group_key = data["group_id"] or "sin_grupo"
+        group_flows[group_key]["in"] += data["in"]
+        group_flows[group_key]["out"] += data["out"]
+        group_flows[group_key]["name"] = data["group_name"]
+    
+    group_nodes = [
+        OperationGroupNode(
+            group_id=group_id if group_id != "sin_grupo" else None,
+            group_name=data["name"],
+            total_in=data["in"],
+            total_out=data["out"]
+        )
+        for group_id, data in group_flows.items()
+    ]
+    
     return OperationFlowMap(
         operation=operation,
         nodes=nodes,
-        edges=edges
+        edges=edges,
+        group_nodes=group_nodes
     )
 
 

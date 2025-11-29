@@ -8,6 +8,7 @@ from app.models import Base
 from app.routers import (
     auth_router,
     users_router,
+    groups_router,
     companies_router,
     accounts_router,
     permissions_router,
@@ -47,6 +48,7 @@ app.add_middleware(
 # Routers
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(groups_router)
 app.include_router(companies_router)
 app.include_router(accounts_router)
 app.include_router(permissions_router)

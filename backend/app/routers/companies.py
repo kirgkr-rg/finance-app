@@ -21,6 +21,7 @@ def create_company(
     company = Company(
         name=company_data.name,
         description=company_data.description,
+        group_id=company_data.group_id,
         created_by=current_user.id
     )
     

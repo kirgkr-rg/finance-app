@@ -28,8 +28,8 @@ class User(Base):
     )
 
 
-class Company(Base):
-    __tablename__ = "companies"
+class Group(Base):
+    __tablename__ = "groups"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
@@ -40,7 +40,25 @@ class Company(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relaciones
+    creator = relationship("User")
+    companies = relationship("Company", back_populates="group")
+
+
+class Company(Base):
+    __tablename__ = "companies"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    description = Column(String)
+    group_id = Column(UUID(as_uuid=True), ForeignKey("groups.id"), nullable=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    # Relaciones
     creator = relationship("User", back_populates="created_companies")
+    group = relationship("Group", back_populates="companies")
     accounts = relationship("Account", back_populates="company", cascade="all, delete-orphan")
 
 
