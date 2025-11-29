@@ -279,6 +279,8 @@ class TransactionResponse(TransactionBase):
     transaction_type: str
     status: str
     operation_id: Optional[UUID] = None
+    from_balance_after: Optional[Decimal] = None
+    to_balance_after: Optional[Decimal] = None
     created_by: Optional[UUID]
     created_at: datetime
     

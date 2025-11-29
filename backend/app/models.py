@@ -146,9 +146,11 @@ class Transaction(Base):
     to_account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"))
     amount = Column(Numeric(15, 2), nullable=False)
     description = Column(String)
-    transaction_type = Column(String(20))
+    transaction_type = Column(String(30))
     status = Column(String(20), default="completed")
     operation_id = Column(UUID(as_uuid=True), ForeignKey("operations.id"), nullable=True)
+    from_balance_after = Column(Numeric(15, 2), nullable=True)  # Saldo cuenta origen después
+    to_balance_after = Column(Numeric(15, 2), nullable=True)    # Saldo cuenta destino después
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime, server_default=func.now())
     

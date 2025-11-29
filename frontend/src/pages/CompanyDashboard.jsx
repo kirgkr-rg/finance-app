@@ -454,12 +454,14 @@ const CompanyDashboard = () => {
                         <th>Origen</th>
                         <th>Destino</th>
                         <th className="text-right">Monto</th>
+                        <th className="text-right">Saldo</th>
                         <th>Fecha</th>
                       </tr>
                     </thead>
                     <tbody>
                       {accountTransactions.map((tx) => {
                         const isOutgoing = tx.from_account_id === selectedAccount.id;
+                        const balanceAfter = isOutgoing ? tx.from_balance_after : tx.to_balance_after;
                         return (
                           <tr key={tx.id}>
                             <td>
@@ -489,6 +491,13 @@ const CompanyDashboard = () => {
                               <span className={`amount ${isOutgoing ? 'negative' : 'positive'}`}>
                                 {isOutgoing ? '-' : '+'}{formatCurrency(tx.amount)}
                               </span>
+                            </td>
+                            <td className="text-right">
+                              {balanceAfter !== null && balanceAfter !== undefined ? (
+                                <span className={`balance ${parseFloat(balanceAfter) >= 0 ? 'positive' : 'negative'}`}>
+                                  {formatCurrency(balanceAfter)}
+                                </span>
+                              ) : '-'}
                             </td>
                             <td className="date-cell">{formatDate(tx.created_at)}</td>
                           </tr>

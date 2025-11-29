@@ -113,6 +113,8 @@ def create_transfer(
         transaction_type="transfer",
         status="completed",
         operation_id=transfer_data.operation_id,
+        from_balance_after=from_account.balance,
+        to_balance_after=to_account.balance,
         created_by=current_user.id
     )
     
@@ -149,6 +151,7 @@ def create_deposit(
         description=deposit_data.description,
         transaction_type="deposit",
         status="completed",
+        to_balance_after=account.balance,
         created_by=current_user.id
     )
     
@@ -191,6 +194,7 @@ def create_withdrawal(
         description=withdrawal_data.description,
         transaction_type="withdrawal",
         status="completed",
+        from_balance_after=account.balance,
         created_by=current_user.id
     )
     
@@ -280,6 +284,8 @@ def create_confirming_settlement(
         description=settlement_data.description or "Vencimiento confirming",
         transaction_type="confirming_settlement",
         status="completed",
+        from_balance_after=charge_account.balance,
+        to_balance_after=confirming_account.balance,
         created_by=current_user.id
     )
     
