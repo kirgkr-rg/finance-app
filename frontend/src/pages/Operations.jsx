@@ -8,7 +8,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  ArrowRight
+  ArrowRight,
+  FolderTree
 } from 'lucide-react';
 
 const Operations = () => {
@@ -377,6 +378,34 @@ const Operations = () => {
                       ))}
                     </div>
                   </div>
+
+                  {/* Resumen por grupo */}
+                  {flowData.group_nodes && flowData.group_nodes.length > 0 && (
+                    <div className="flow-summary group-summary">
+                      <h3><FolderTree size={20} /> Resumen por Grupo</h3>
+                      <div className="summary-grid">
+                        {flowData.group_nodes.map((node, index) => (
+                          <div key={node.group_id || `no-group-${index}`} className="summary-card group-card-summary">
+                            <h4>{node.group_name}</h4>
+                            <div className="summary-row">
+                              <span className="label">Entradas:</span>
+                              <span className="value positive">+{formatCurrency(node.total_in)}</span>
+                            </div>
+                            <div className="summary-row">
+                              <span className="label">Salidas:</span>
+                              <span className="value negative">-{formatCurrency(node.total_out)}</span>
+                            </div>
+                            <div className="summary-row total">
+                              <span className="label">Neto:</span>
+                              <span className={`value ${node.total_in - node.total_out >= 0 ? 'positive' : 'negative'}`}>
+                                {formatCurrency(node.total_in - node.total_out)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
