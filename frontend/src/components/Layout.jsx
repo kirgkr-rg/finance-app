@@ -36,7 +36,6 @@ const Layout = ({ children }) => {
   if (isSupervisor()) {
     navItems.push(
       { path: '/operations', icon: GitBranch, label: 'Operaciones' },
-      { path: '/groups', icon: FolderTree, label: 'Grupos' },
       { path: '/users', icon: Users, label: 'Usuarios' },
       { path: '/permissions', icon: Shield, label: 'Permisos' }
     );

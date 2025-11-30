@@ -1689,3 +1689,74 @@ body {
   color: var(--primary);
   background: rgba(99, 102, 241, 0.1);
 }
+
+/* Groups filter */
+.groups-filter {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.groups-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.group-chip-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.group-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.group-chip:hover {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: var(--primary);
+}
+
+.group-chip.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.group-chip.muted {
+  color: var(--text-muted);
+}
+
+.group-chip-actions {
+  display: flex;
+  gap: 0.125rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.group-chip-wrapper:hover .group-chip-actions {
+  opacity: 1;
+}
+
+.btn-tiny {
+  padding: 0.125rem;
+  border-radius: 4px;
+}
+
+.btn-tiny svg {
+  width: 12px;
+  height: 12px;
+}
