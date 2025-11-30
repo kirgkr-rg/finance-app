@@ -868,6 +868,11 @@ body {
   margin-left: 0.5rem;
 }
 
+.section-title .total-available {
+  color: var(--success);
+  font-weight: 600;
+}
+
 .expand-controls {
   display: flex;
   gap: 0.5rem;

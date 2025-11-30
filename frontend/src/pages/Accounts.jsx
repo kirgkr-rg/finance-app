@@ -257,7 +257,9 @@ const Accounts = () => {
           <p>No tienes acceso a ninguna cuenta</p>
         </div>
       ) : (
-        Object.values(accountsByCompany).map(({ company, accounts: companyAccounts }) => (
+        Object.values(accountsByCompany).map(({ company, accounts: companyAccounts }) => {
+          const totalAvailable = companyAccounts.reduce((sum, acc) => sum + parseFloat(acc.available || 0), 0);
+          return (
           <section key={company.id} className="card accounts-section collapsible">
             <h2 
               className="section-title clickable" 
@@ -265,7 +267,10 @@ const Accounts = () => {
             >
               {expandedCompanies[company.id] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
               {company.name}
-              <span className="account-count">({companyAccounts.length} cuentas)</span>
+              <span className="account-count">
+                {companyAccounts.length} {companyAccounts.length === 1 ? 'cuenta' : 'cuentas'} · 
+                <span className="total-available"> {formatCurrency(totalAvailable)}</span>
+              </span>
             </h2>
             {expandedCompanies[company.id] && (
               <div className="accounts-table-container">
@@ -324,7 +329,7 @@ const Accounts = () => {
               </div>
             )}
           </section>
-        ))
+        );})
       )}
 
       {showModal && (
