@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Wallet, Plus, X, Edit, Trash2 } from 'lucide-react';
+import { Wallet, Plus, X, Edit, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 
 const Accounts = () => {
   const { isSupervisor } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
@@ -21,6 +22,8 @@ const Accounts = () => {
     initial_available: ''
   });
   const [error, setError] = useState('');
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState('all');
+  const [expandedCompanies, setExpandedCompanies] = useState({});
 
   useEffect(() => {
     fetchData();
@@ -28,12 +31,19 @@ const Accounts = () => {
 
   const fetchData = async () => {
     try {
-      const [accountsRes, companiesRes] = await Promise.all([
+      const [accountsRes, companiesRes, groupsRes] = await Promise.all([
         api.get('/accounts/'),
-        api.get('/companies/')
+        api.get('/companies/'),
+        api.get('/groups/')
       ]);
       setAccounts(accountsRes.data);
       setCompanies(companiesRes.data);
+      setGroups(groupsRes.data);
+      
+      // Expandir todas las empresas por defecto
+      const expanded = {};
+      companiesRes.data.forEach(c => expanded[c.id] = true);
+      setExpandedCompanies(expanded);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -140,9 +150,36 @@ const Accounts = () => {
     }).format(amount);
   };
 
-  // Agrupar cuentas por empresa
+  const toggleCompany = (companyId) => {
+    setExpandedCompanies(prev => ({
+      ...prev,
+      [companyId]: !prev[companyId]
+    }));
+  };
+
+  const expandAll = () => {
+    const expanded = {};
+    companies.forEach(c => expanded[c.id] = true);
+    setExpandedCompanies(expanded);
+  };
+
+  const collapseAll = () => {
+    setExpandedCompanies({});
+  };
+
+  // Filtrar empresas por grupo
+  const filteredCompanies = companies.filter(company => {
+    if (selectedGroupFilter === 'all') return true;
+    if (selectedGroupFilter === 'none') return !company.group_id;
+    return company.group_id === selectedGroupFilter;
+  });
+
+  // Agrupar cuentas por empresa (solo empresas filtradas)
   const accountsByCompany = accounts.reduce((acc, account) => {
     const companyId = account.company_id;
+    const company = filteredCompanies.find(c => c.id === companyId);
+    if (!company) return acc;
+    
     if (!acc[companyId]) {
       acc[companyId] = {
         company: account.company,
@@ -152,6 +189,14 @@ const Accounts = () => {
     acc[companyId].accounts.push(account);
     return acc;
   }, {});
+
+  // Contar cuentas por grupo
+  const getGroupAccountCount = (groupId) => {
+    const companyIds = companies
+      .filter(c => groupId === 'none' ? !c.group_id : c.group_id === groupId)
+      .map(c => c.id);
+    return accounts.filter(a => companyIds.includes(a.company_id)).length;
+  };
 
   if (loading) {
     return <div className="loading-container"><p>Cargando...</p></div>;
@@ -172,6 +217,39 @@ const Accounts = () => {
         )}
       </header>
 
+      {/* Filtro por grupos */}
+      <div className="groups-filter">
+        <div className="groups-chips">
+          <button
+            className={`group-chip ${selectedGroupFilter === 'all' ? 'active' : ''}`}
+            onClick={() => setSelectedGroupFilter('all')}
+          >
+            Todos ({accounts.length})
+          </button>
+          {groups.map(group => (
+            <button
+              key={group.id}
+              className={`group-chip ${selectedGroupFilter === group.id ? 'active' : ''}`}
+              onClick={() => setSelectedGroupFilter(group.id)}
+            >
+              {group.name} ({getGroupAccountCount(group.id)})
+            </button>
+          ))}
+          {companies.some(c => !c.group_id) && (
+            <button
+              className={`group-chip ${selectedGroupFilter === 'none' ? 'active' : ''}`}
+              onClick={() => setSelectedGroupFilter('none')}
+            >
+              Sin grupo ({getGroupAccountCount('none')})
+            </button>
+          )}
+        </div>
+        <div className="expand-controls">
+          <button className="btn btn-sm btn-secondary" onClick={expandAll}>Expandir todo</button>
+          <button className="btn btn-sm btn-secondary" onClick={collapseAll}>Colapsar todo</button>
+        </div>
+      </div>
+
       {Object.keys(accountsByCompany).length === 0 ? (
         <div className="empty-state">
           <Wallet size={64} />
@@ -179,65 +257,74 @@ const Accounts = () => {
           <p>No tienes acceso a ninguna cuenta</p>
         </div>
       ) : (
-        Object.values(accountsByCompany).map(({ company, accounts }) => (
-          <section key={company.id} className="card accounts-section">
-            <h2 className="section-title">{company.name}</h2>
-            <div className="accounts-table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Nombre</th>
-                    <th>IBAN</th>
-                    <th>Tipo</th>
-                    <th>Moneda</th>
-                    <th className="text-right">Saldo</th>
-                    <th className="text-right">Disponible</th>
-                    {isSupervisor() && <th>Acciones</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {accounts.map((account) => (
-                    <tr key={account.id}>
-                      <td>
-                        <div className="account-name-cell">
-                          <Wallet size={18} />
-                          {account.name}
-                        </div>
-                      </td>
-                      <td className="iban-cell">{account.iban || '-'}</td>
-                      <td>
-                        <span className={`account-type-badge ${account.account_type}`}>
-                          {getAccountTypeLabel(account.account_type)}
-                        </span>
-                      </td>
-                      <td>{account.currency}</td>
-                      <td className="text-right">
-                        <span className={`balance ${parseFloat(account.balance) >= 0 ? 'positive' : 'negative'}`}>
-                          {formatCurrency(account.balance, account.currency)}
-                        </span>
-                      </td>
-                      <td className="text-right">
-                        <span className="balance positive">
-                          {formatCurrency(account.available, account.currency)}
-                        </span>
-                      </td>
-                      {isSupervisor() && (
+        Object.values(accountsByCompany).map(({ company, accounts: companyAccounts }) => (
+          <section key={company.id} className="card accounts-section collapsible">
+            <h2 
+              className="section-title clickable" 
+              onClick={() => toggleCompany(company.id)}
+            >
+              {expandedCompanies[company.id] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+              {company.name}
+              <span className="account-count">({companyAccounts.length} cuentas)</span>
+            </h2>
+            {expandedCompanies[company.id] && (
+              <div className="accounts-table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>IBAN</th>
+                      <th>Tipo</th>
+                      <th>Moneda</th>
+                      <th className="text-right">Saldo</th>
+                      <th className="text-right">Disponible</th>
+                      {isSupervisor() && <th>Acciones</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {companyAccounts.map((account) => (
+                      <tr key={account.id}>
                         <td>
-                          <div className="table-actions">
-                            <button className="btn btn-icon" onClick={() => handleEdit(account)}>
-                              <Edit size={16} />
-                            </button>
-                            <button className="btn btn-icon danger" onClick={() => handleDelete(account)}>
-                              <Trash2 size={16} />
-                            </button>
+                          <div className="account-name-cell">
+                            <Wallet size={18} />
+                            {account.name}
                           </div>
                         </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        <td className="iban-cell">{account.iban || '-'}</td>
+                        <td>
+                          <span className={`account-type-badge ${account.account_type}`}>
+                            {getAccountTypeLabel(account.account_type)}
+                          </span>
+                        </td>
+                        <td>{account.currency}</td>
+                        <td className="text-right">
+                          <span className={`balance ${parseFloat(account.balance) >= 0 ? 'positive' : 'negative'}`}>
+                            {formatCurrency(account.balance, account.currency)}
+                          </span>
+                        </td>
+                        <td className="text-right">
+                          <span className="balance positive">
+                            {formatCurrency(account.available, account.currency)}
+                          </span>
+                        </td>
+                        {isSupervisor() && (
+                          <td>
+                            <div className="table-actions">
+                              <button className="btn btn-icon" onClick={() => handleEdit(account)}>
+                                <Edit size={16} />
+                              </button>
+                              <button className="btn btn-icon danger" onClick={() => handleDelete(account)}>
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         ))
       )}

@@ -849,6 +849,53 @@ body {
   color: var(--text-muted);
 }
 
+.section-title.clickable {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+}
+
+.section-title.clickable:hover {
+  color: var(--primary);
+}
+
+.section-title .account-count {
+  font-size: 0.85rem;
+  font-weight: normal;
+  color: var(--text-muted);
+  margin-left: 0.5rem;
+}
+
+.expand-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.groups-filter {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.accounts-section.collapsible {
+  overflow: hidden;
+}
+
+.accounts-section.collapsible .section-title {
+  margin-bottom: 0;
+  padding: 1rem;
+  border-bottom: none;
+}
+
+.accounts-section.collapsible .accounts-table-container {
+  border-top: 1px solid var(--border);
+}
+
 .balance {
   font-weight: 600;
 }
