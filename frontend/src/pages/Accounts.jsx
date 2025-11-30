@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Wallet, Plus, X, Edit, Trash2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 
 const Accounts = () => {
-  const { isSupervisor, isDemo, canEdit } = useAuth();
+  const { isSupervisor } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -190,7 +190,7 @@ const Accounts = () => {
 
   // Función para mostrar u ocultar saldos según el modo
   const displayAmount = (amount, currency = 'EUR') => {
-    if (isDemo()) {
+    if (false) {
       return '****';
     }
     return formatCurrency(amount, currency);
@@ -255,7 +255,7 @@ const Accounts = () => {
           <h1>Cuentas</h1>
           <p>Gestiona las cuentas de las empresas</p>
         </div>
-        {canEdit() && (
+        {isSupervisor() && (
           <button className="btn btn-primary" onClick={openNewModal}>
             <Plus size={18} />
             Nueva Cuenta
@@ -328,7 +328,7 @@ const Accounts = () => {
                       <th>Moneda</th>
                       <th className="text-right">Saldo</th>
                       <th className="text-right">Disponible</th>
-                      {canEdit() && <th>Acciones</th>}
+                      {isSupervisor() && <th>Acciones</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -356,7 +356,7 @@ const Accounts = () => {
                             {displayAmount(account.available, account.currency)}
                           </span>
                         </td>
-                        {canEdit() && (
+                        {isSupervisor() && (
                           <td>
                             <div className="table-actions">
                               <button 
