@@ -8,7 +8,14 @@ import {
   Plus,
   X,
   RefreshCw,
-  RotateCcw
+  RotateCcw,
+  Paperclip,
+  GitBranch,
+  Upload,
+  Download,
+  Trash2,
+  FileText,
+  Eye
 } from 'lucide-react';
 
 const Transactions = () => {
@@ -28,6 +35,18 @@ const Transactions = () => {
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  
+  // Estado para adjuntos
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [attachments, setAttachments] = useState([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  
+  // Estado para asignar operación
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [transactionToAssign, setTransactionToAssign] = useState(null);
+  const [operations, setOperations] = useState([]);
+  const [selectedOperationId, setSelectedOperationId] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -142,6 +161,144 @@ const Transactions = () => {
     setShowModal(true);
   };
 
+  // Funciones para adjuntos
+  const viewTransactionAttachments = async (transaction) => {
+    setSelectedTransaction(transaction);
+    setLoadingAttachments(true);
+    try {
+      const response = await api.get(`/attachments/transaction/${transaction.id}`);
+      setAttachments(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+      setAttachments([]);
+    } finally {
+      setLoadingAttachments(false);
+    }
+  };
+
+  const closeAttachmentsModal = () => {
+    setSelectedTransaction(null);
+    setAttachments([]);
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('El archivo es demasiado grande. Máximo: 5MB');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      await api.post(`/attachments/transaction/${selectedTransaction.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      const response = await api.get(`/attachments/transaction/${selectedTransaction.id}`);
+      setAttachments(response.data);
+    } catch (error) {
+      alert(error.response?.data?.detail || 'Error al subir archivo');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const downloadAttachment = async (attachment) => {
+    try {
+      const response = await api.get(`/attachments/${attachment.id}/download`, {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', attachment.filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert('Error al descargar archivo');
+    }
+  };
+
+  const viewAttachment = async (attachment) => {
+    try {
+      const response = await api.get(`/attachments/${attachment.id}/download`, {
+        responseType: 'blob'
+      });
+      
+      const blob = new Blob([response.data], { type: attachment.content_type });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (error) {
+      alert('Error al abrir archivo');
+    }
+  };
+
+  const deleteAttachment = async (attachment) => {
+    if (!confirm(`¿Eliminar ${attachment.filename}?`)) return;
+
+    try {
+      await api.delete(`/attachments/${attachment.id}`);
+      setAttachments(attachments.filter(a => a.id !== attachment.id));
+    } catch (error) {
+      alert(error.response?.data?.detail || 'Error al eliminar archivo');
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  // Funciones para asignar operación
+  const openAssignModal = async (transaction) => {
+    setTransactionToAssign(transaction);
+    setSelectedOperationId(transaction.operation_id || '');
+    try {
+      const response = await api.get('/operations/?status=open');
+      setOperations(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+      setOperations([]);
+    }
+    setShowAssignModal(true);
+  };
+
+  const closeAssignModal = () => {
+    setShowAssignModal(false);
+    setTransactionToAssign(null);
+    setSelectedOperationId('');
+  };
+
+  const handleAssignOperation = async () => {
+    try {
+      await api.patch(
+        `/transactions/${transactionToAssign.id}/assign-operation`,
+        null,
+        { params: { operation_id: selectedOperationId || null } }
+      );
+      
+      setTransactions(transactions.map(tx => 
+        tx.id === transactionToAssign.id 
+          ? { ...tx, operation_id: selectedOperationId || null }
+          : tx
+      ));
+      
+      closeAssignModal();
+    } catch (error) {
+      alert(error.response?.data?.detail || 'Error al asignar operación');
+    }
+  };
+
   // Filtrar cuentas por tipo
   const confirmingAccounts = accounts.filter(a => a.account_type === 'confirming');
   const corrienteAccounts = accounts.filter(a => a.account_type === 'corriente');
@@ -201,6 +358,7 @@ const Transactions = () => {
                   <th>Destino</th>
                   <th className="text-right">Monto</th>
                   <th>Fecha</th>
+                  {isSupervisor() && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -238,6 +396,26 @@ const Transactions = () => {
                       </span>
                     </td>
                     <td className="date-cell">{formatDate(tx.created_at)}</td>
+                    {isSupervisor() && (
+                      <td>
+                        <div className="table-actions">
+                          <button 
+                            className="btn btn-icon btn-sm" 
+                            onClick={() => viewTransactionAttachments(tx)}
+                            title="Ver adjuntos"
+                          >
+                            <Paperclip size={16} />
+                          </button>
+                          <button 
+                            className={`btn btn-icon btn-sm ${tx.operation_id ? 'has-operation' : ''}`}
+                            onClick={() => openAssignModal(tx)}
+                            title={tx.operation_id ? "Cambiar operación" : "Asignar a operación"}
+                          >
+                            <GitBranch size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -382,6 +560,132 @@ const Transactions = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Adjuntos */}
+      {selectedTransaction && (
+        <div className="modal-overlay" onClick={closeAttachmentsModal}>
+          <div className="modal modal-medium" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>Adjuntos</h2>
+                <span className="modal-subtitle">
+                  {selectedTransaction.description || 'Transacción'} - {formatCurrency(selectedTransaction.amount)}
+                </span>
+              </div>
+              <button className="btn btn-icon" onClick={closeAttachmentsModal}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="upload-section">
+                <label className="btn btn-primary upload-btn">
+                  <Upload size={18} />
+                  {uploading ? 'Subiendo...' : 'Subir archivo'}
+                  <input 
+                    type="file" 
+                    onChange={handleFileUpload} 
+                    disabled={uploading}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+                <span className="upload-hint">Máximo 5MB por archivo</span>
+              </div>
+
+              {loadingAttachments ? (
+                <div className="loading-container">
+                  <RefreshCw className="spin" size={24} />
+                  <p>Cargando...</p>
+                </div>
+              ) : attachments.length === 0 ? (
+                <div className="empty-state small">
+                  <Paperclip size={32} />
+                  <p>No hay adjuntos</p>
+                </div>
+              ) : (
+                <div className="attachments-list">
+                  {attachments.map((att) => (
+                    <div key={att.id} className="attachment-item">
+                      <div className="attachment-icon">
+                        <FileText size={24} />
+                      </div>
+                      <div className="attachment-info">
+                        <span className="attachment-name">{att.filename}</span>
+                        <span className="attachment-size">{formatFileSize(att.file_size)}</span>
+                      </div>
+                      <div className="attachment-actions">
+                        <button 
+                          className="btn btn-icon btn-sm" 
+                          onClick={() => viewAttachment(att)}
+                          title="Ver"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button 
+                          className="btn btn-icon btn-sm" 
+                          onClick={() => downloadAttachment(att)}
+                          title="Descargar"
+                        >
+                          <Download size={16} />
+                        </button>
+                        <button 
+                          className="btn btn-icon btn-sm danger" 
+                          onClick={() => deleteAttachment(att)}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Asignar Operación */}
+      {showAssignModal && transactionToAssign && (
+        <div className="modal-overlay" onClick={closeAssignModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Asignar a Operación</h2>
+              <button className="btn btn-icon" onClick={closeAssignModal}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="info-box">
+                <strong>Transacción:</strong> {transactionToAssign.description || 'Sin descripción'}<br />
+                <strong>Importe:</strong> {formatCurrency(transactionToAssign.amount)}
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="operation_id">Operación</label>
+                <select
+                  id="operation_id"
+                  value={selectedOperationId}
+                  onChange={(e) => setSelectedOperationId(e.target.value)}
+                >
+                  <option value="">Sin operación</option>
+                  {operations.map((op) => (
+                    <option key={op.id} value={op.id}>{op.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={closeAssignModal}>
+                  Cancelar
+                </button>
+                <button className="btn btn-primary" onClick={handleAssignOperation}>
+                  Guardar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
