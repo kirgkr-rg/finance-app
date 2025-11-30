@@ -344,6 +344,41 @@ def list_transactions(
     return query.limit(limit).all()
 
 
+@router.get("/{transaction_id}/can-edit")
+def can_edit_transaction(
+    transaction_id: UUID,
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """Verificar si una transacción se puede editar."""
+    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    
+    if not transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transacción no encontrada"
+        )
+    
+    def is_last_transaction(account_id: UUID) -> bool:
+        if not account_id:
+            return True
+        
+        later_tx = db.query(Transaction).filter(
+            or_(
+                Transaction.from_account_id == account_id,
+                Transaction.to_account_id == account_id
+            ),
+            Transaction.created_at > transaction.created_at,
+            Transaction.id != transaction.id
+        ).first()
+        
+        return later_tx is None
+    
+    can_edit = is_last_transaction(transaction.from_account_id) and is_last_transaction(transaction.to_account_id)
+    
+    return {"can_edit": can_edit}
+
+
 @router.get("/{transaction_id}", response_model=TransactionWithAccounts)
 def get_transaction(
     transaction_id: UUID,
@@ -517,38 +552,3 @@ def update_transaction(
     db.refresh(transaction)
     
     return transaction
-
-
-@router.get("/{transaction_id}/can-edit")
-def can_edit_transaction(
-    transaction_id: UUID,
-    current_user: User = Depends(get_current_supervisor),
-    db: Session = Depends(get_db)
-):
-    """Verificar si una transacción se puede editar."""
-    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
-    
-    if not transaction:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Transacción no encontrada"
-        )
-    
-    def is_last_transaction(account_id: UUID) -> bool:
-        if not account_id:
-            return True
-        
-        later_tx = db.query(Transaction).filter(
-            or_(
-                Transaction.from_account_id == account_id,
-                Transaction.to_account_id == account_id
-            ),
-            Transaction.created_at > transaction.created_at,
-            Transaction.id != transaction.id
-        ).first()
-        
-        return later_tx is None
-    
-    can_edit = is_last_transaction(transaction.from_account_id) and is_last_transaction(transaction.to_account_id)
-    
-    return {"can_edit": can_edit}
