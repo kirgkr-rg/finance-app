@@ -873,6 +873,20 @@ body {
   font-weight: 600;
 }
 
+.adjust-preview {
+  display: block;
+  margin-top: 0.5rem;
+  font-weight: 600;
+}
+
+.adjust-preview.positive {
+  color: var(--success);
+}
+
+.adjust-preview.negative {
+  color: var(--danger);
+}
+
 .expand-controls {
   display: flex;
   gap: 0.5rem;

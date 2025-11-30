@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Wallet, Plus, X, Edit, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Wallet, Plus, X, Edit, Trash2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 
 const Accounts = () => {
-  const { isSupervisor } = useAuth();
+  const { isSupervisor, isDemo, canEdit } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -24,6 +24,13 @@ const Accounts = () => {
   const [error, setError] = useState('');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState('all');
   const [expandedCompanies, setExpandedCompanies] = useState({});
+  
+  // Estado para ajuste de saldo
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [adjustingAccount, setAdjustingAccount] = useState(null);
+  const [targetBalance, setTargetBalance] = useState('');
+  const [adjustDescription, setAdjustDescription] = useState('Ajuste de saldo');
+  const [adjustError, setAdjustError] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -129,6 +136,37 @@ const Accounts = () => {
     }
   };
 
+  const openAdjustModal = (account) => {
+    setAdjustingAccount(account);
+    setTargetBalance(account.balance.toString());
+    setAdjustDescription('Ajuste de saldo');
+    setAdjustError('');
+    setShowAdjustModal(true);
+  };
+
+  const handleAdjustSubmit = async (e) => {
+    e.preventDefault();
+    setAdjustError('');
+
+    try {
+      await api.post(
+        `/accounts/${adjustingAccount.id}/adjust-balance`,
+        null,
+        { 
+          params: { 
+            target_balance: parseFloat(targetBalance),
+            description: adjustDescription
+          } 
+        }
+      );
+      setShowAdjustModal(false);
+      setAdjustingAccount(null);
+      fetchData();
+    } catch (err) {
+      setAdjustError(err.response?.data?.detail || 'Error al ajustar saldo');
+    }
+  };
+
   const openNewModal = () => {
     setEditingAccount(null);
     setFormData({ name: '', iban: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0', initial_available: '' });
@@ -148,6 +186,14 @@ const Accounts = () => {
       style: 'currency',
       currency: currency,
     }).format(amount);
+  };
+
+  // Función para mostrar u ocultar saldos según el modo
+  const displayAmount = (amount, currency = 'EUR') => {
+    if (isDemo()) {
+      return '****';
+    }
+    return formatCurrency(amount, currency);
   };
 
   const toggleCompany = (companyId) => {
@@ -209,7 +255,7 @@ const Accounts = () => {
           <h1>Cuentas</h1>
           <p>Gestiona las cuentas de las empresas</p>
         </div>
-        {isSupervisor() && (
+        {canEdit() && (
           <button className="btn btn-primary" onClick={openNewModal}>
             <Plus size={18} />
             Nueva Cuenta
@@ -269,7 +315,7 @@ const Accounts = () => {
               {company.name}
               <span className="account-count">
                 {companyAccounts.length} {companyAccounts.length === 1 ? 'cuenta' : 'cuentas'} · 
-                <span className="total-available"> {formatCurrency(totalAvailable)}</span>
+                <span className="total-available"> {displayAmount(totalAvailable)}</span>
               </span>
             </h2>
             {expandedCompanies[company.id] && (
@@ -282,7 +328,7 @@ const Accounts = () => {
                       <th>Moneda</th>
                       <th className="text-right">Saldo</th>
                       <th className="text-right">Disponible</th>
-                      {isSupervisor() && <th>Acciones</th>}
+                      {canEdit() && <th>Acciones</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -302,21 +348,36 @@ const Accounts = () => {
                         <td>{account.currency}</td>
                         <td className="text-right">
                           <span className={`balance ${parseFloat(account.balance) >= 0 ? 'positive' : 'negative'}`}>
-                            {formatCurrency(account.balance, account.currency)}
+                            {displayAmount(account.balance, account.currency)}
                           </span>
                         </td>
                         <td className="text-right">
                           <span className="balance positive">
-                            {formatCurrency(account.available, account.currency)}
+                            {displayAmount(account.available, account.currency)}
                           </span>
                         </td>
-                        {isSupervisor() && (
+                        {canEdit() && (
                           <td>
                             <div className="table-actions">
-                              <button className="btn btn-icon" onClick={() => handleEdit(account)}>
+                              <button 
+                                className="btn btn-icon" 
+                                onClick={() => openAdjustModal(account)}
+                                title="Ajustar saldo"
+                              >
+                                <RefreshCw size={16} />
+                              </button>
+                              <button 
+                                className="btn btn-icon" 
+                                onClick={() => handleEdit(account)}
+                                title="Editar cuenta"
+                              >
                                 <Edit size={16} />
                               </button>
-                              <button className="btn btn-icon danger" onClick={() => handleDelete(account)}>
+                              <button 
+                                className="btn btn-icon danger" 
+                                onClick={() => handleDelete(account)}
+                                title="Eliminar cuenta"
+                              >
                                 <Trash2 size={16} />
                               </button>
                             </div>
@@ -501,6 +562,70 @@ const Accounts = () => {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   {editingAccount ? 'Guardar' : 'Crear Cuenta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ajustar Saldo */}
+      {showAdjustModal && adjustingAccount && (
+        <div className="modal-overlay" onClick={() => setShowAdjustModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Ajustar Saldo</h2>
+              <button className="btn btn-icon" onClick={() => setShowAdjustModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleAdjustSubmit}>
+              {adjustError && <div className="error-message">{adjustError}</div>}
+
+              <div className="info-box">
+                <strong>{adjustingAccount.company?.name}</strong> - {adjustingAccount.name}<br />
+                Saldo actual: <strong>{formatCurrency(adjustingAccount.balance, adjustingAccount.currency)}</strong>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="target_balance">Saldo real</label>
+                <input
+                  type="number"
+                  id="target_balance"
+                  value={targetBalance}
+                  onChange={(e) => setTargetBalance(e.target.value)}
+                  step="0.01"
+                  required
+                />
+                {targetBalance && parseFloat(targetBalance) !== parseFloat(adjustingAccount.balance) && (
+                  <small className={`adjust-preview ${parseFloat(targetBalance) > parseFloat(adjustingAccount.balance) ? 'positive' : 'negative'}`}>
+                    {parseFloat(targetBalance) > parseFloat(adjustingAccount.balance) ? '↑ Ingreso de ' : '↓ Retirada de '}
+                    {formatCurrency(Math.abs(parseFloat(targetBalance) - parseFloat(adjustingAccount.balance)), adjustingAccount.currency)}
+                  </small>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="adjust_description">Descripción</label>
+                <input
+                  type="text"
+                  id="adjust_description"
+                  value={adjustDescription}
+                  onChange={(e) => setAdjustDescription(e.target.value)}
+                  placeholder="Ej: Comisiones bancarias, Ajuste de saldo..."
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAdjustModal(false)}>
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={parseFloat(targetBalance) === parseFloat(adjustingAccount.balance)}
+                >
+                  Ajustar Saldo
                 </button>
               </div>
             </form>

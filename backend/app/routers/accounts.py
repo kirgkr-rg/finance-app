@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 from uuid import UUID
 from decimal import Decimal
+from datetime import datetime
 
 from app.database import get_db
 from app.models import User, Company, Account, AccountPermission, Transaction
@@ -192,3 +193,72 @@ def delete_account(
     
     account.is_active = False
     db.commit()
+
+
+@router.post("/{account_id}/adjust-balance")
+def adjust_balance(
+    account_id: UUID,
+    target_balance: Decimal,
+    description: str = "Ajuste de saldo",
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """
+    Ajustar el saldo de una cuenta creando una transacción de ajuste.
+    Crea un ingreso o retirada según la diferencia.
+    """
+    account = db.query(Account).filter(Account.id == account_id).first()
+    
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cuenta no encontrada"
+        )
+    
+    current_balance = account.balance
+    difference = target_balance - current_balance
+    
+    if difference == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El saldo ya coincide"
+        )
+    
+    # Crear transacción de ajuste
+    if difference > 0:
+        # Ingreso
+        transaction = Transaction(
+            to_account_id=account.id,
+            amount=difference,
+            description=description,
+            transaction_type="deposit",
+            status="completed",
+            transaction_date=datetime.utcnow(),
+            created_by=current_user.id
+        )
+        account.balance = target_balance
+        transaction.to_balance_after = account.balance
+    else:
+        # Retirada
+        transaction = Transaction(
+            from_account_id=account.id,
+            amount=abs(difference),
+            description=description,
+            transaction_type="withdrawal",
+            status="completed",
+            transaction_date=datetime.utcnow(),
+            created_by=current_user.id
+        )
+        account.balance = target_balance
+        transaction.from_balance_after = account.balance
+    
+    db.add(transaction)
+    db.commit()
+    
+    return {
+        "message": "Saldo ajustado correctamente",
+        "previous_balance": float(current_balance),
+        "new_balance": float(target_balance),
+        "adjustment": float(difference),
+        "transaction_type": "deposit" if difference > 0 else "withdrawal"
+    }
