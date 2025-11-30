@@ -232,3 +232,113 @@ def delete_operation(
     
     db.delete(operation)
     db.commit()
+
+
+@router.get("/summary/groups-balance")
+def get_groups_balance(
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """Obtener el balance neto entre grupos de todas las operaciones."""
+    from app.models import Company, Group
+    
+    # Obtener todas las transacciones de tipo transfer que tienen operación
+    transactions = db.query(Transaction).filter(
+        Transaction.transaction_type == "transfer",
+        Transaction.from_account_id.isnot(None),
+        Transaction.to_account_id.isnot(None)
+    ).options(
+        joinedload(Transaction.from_account).joinedload(Account.company).joinedload(Company.group),
+        joinedload(Transaction.to_account).joinedload(Account.company).joinedload(Company.group)
+    ).all()
+    
+    # Calcular balance entre grupos
+    # Positivo = el grupo ha recibido más de lo que ha enviado
+    group_balances = defaultdict(lambda: Decimal("0"))
+    group_names = {}
+    
+    for tx in transactions:
+        from_company = tx.from_account.company
+        to_company = tx.to_account.company
+        
+        from_group_id = from_company.group_id
+        to_group_id = to_company.group_id
+        
+        # Solo contar si son grupos diferentes
+        if from_group_id != to_group_id:
+            # El grupo origen pierde, el destino gana
+            if from_group_id:
+                group_balances[str(from_group_id)] -= tx.amount
+                if from_company.group:
+                    group_names[str(from_group_id)] = from_company.group.name
+            
+            if to_group_id:
+                group_balances[str(to_group_id)] += tx.amount
+                if to_company.group:
+                    group_names[str(to_group_id)] = to_company.group.name
+    
+    # Convertir a lista
+    result = [
+        {
+            "group_id": group_id,
+            "group_name": group_names.get(group_id, "Sin grupo"),
+            "balance": float(balance)
+        }
+        for group_id, balance in group_balances.items()
+        if balance != 0  # Solo mostrar grupos con balance != 0
+    ]
+    
+    # Ordenar por balance descendente
+    result.sort(key=lambda x: x["balance"], reverse=True)
+    
+    return result
+
+
+@router.get("/summary/dashboard")
+def get_operations_dashboard(
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """Obtener resumen de operaciones para el dashboard."""
+    # Operaciones abiertas
+    open_operations = db.query(Operation).filter(
+        Operation.status == "open"
+    ).order_by(Operation.created_at.desc()).all()
+    
+    # Últimas operaciones (todas)
+    recent_operations = db.query(Operation).order_by(
+        Operation.updated_at.desc()
+    ).limit(10).all()
+    
+    # Contar por estado
+    total_open = db.query(Operation).filter(Operation.status == "open").count()
+    total_completed = db.query(Operation).filter(Operation.status == "completed").count()
+    total_cancelled = db.query(Operation).filter(Operation.status == "cancelled").count()
+    
+    return {
+        "open_operations": [
+            {
+                "id": str(op.id),
+                "name": op.name,
+                "description": op.description,
+                "created_at": op.created_at,
+                "transaction_count": len(op.transactions)
+            }
+            for op in open_operations
+        ],
+        "recent_operations": [
+            {
+                "id": str(op.id),
+                "name": op.name,
+                "status": op.status,
+                "updated_at": op.updated_at,
+                "closed_at": op.closed_at
+            }
+            for op in recent_operations
+        ],
+        "counts": {
+            "open": total_open,
+            "completed": total_completed,
+            "cancelled": total_cancelled
+        }
+    }

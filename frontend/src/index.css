@@ -333,6 +333,127 @@ body {
   gap: 0.25rem;
 }
 
+/* Dashboard Operations */
+.operations-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.operation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.2s;
+}
+
+.operation-item:hover {
+  background: var(--bg-secondary);
+}
+
+.operation-item:last-child {
+  border-bottom: none;
+}
+
+.operation-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.operation-item-name {
+  font-weight: 500;
+}
+
+.operation-item-meta {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Groups Balance */
+.groups-balance-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.group-balance-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.group-balance-item:last-child {
+  border-bottom: none;
+}
+
+.group-balance-name {
+  font-weight: 500;
+}
+
+.group-balance-amount {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.group-balance-amount.positive {
+  color: var(--success);
+}
+
+.group-balance-amount.negative {
+  color: var(--danger);
+}
+
+.balance-explanation {
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+
+/* Status badge inline */
+.status-badge-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.operation-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.operation-link:hover {
+  text-decoration: underline;
+}
+
+/* Stat card variants */
+.stat-card.warning {
+  border-left: 4px solid var(--warning);
+}
+
+.stat-card.warning .stat-icon {
+  color: var(--warning);
+}
+
+.stat-card.success {
+  border-left: 4px solid var(--success);
+}
+
+.stat-card.success .stat-icon {
+  color: var(--success);
+}
+
 .user-info {
   display: flex;
   align-items: center;

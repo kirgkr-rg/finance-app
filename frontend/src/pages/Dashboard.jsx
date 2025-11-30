@@ -3,19 +3,23 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import {
-  Wallet,
-  Building2,
-  ArrowUpRight,
-  ArrowDownLeft,
+  GitBranch,
+  Clock,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
   TrendingUp,
-  RefreshCw
+  TrendingDown,
+  FolderTree,
+  ArrowRight,
+  Eye
 } from 'lucide-react';
 
 const Dashboard = () => {
-  const { user } = useAuth();
-  const [accounts, setAccounts] = useState([]);
-  const [transactions, setTransactions] = useState([]);
+  const { user, isSupervisor } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [operationsSummary, setOperationsSummary] = useState(null);
+  const [groupsBalance, setGroupsBalance] = useState([]);
 
   useEffect(() => {
     fetchData();
@@ -24,12 +28,14 @@ const Dashboard = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [accountsRes, transactionsRes] = await Promise.all([
-        api.get('/accounts/'),
-        api.get('/transactions/?limit=10')
-      ]);
-      setAccounts(accountsRes.data);
-      setTransactions(transactionsRes.data);
+      if (isSupervisor()) {
+        const [summaryRes, balanceRes] = await Promise.all([
+          api.get('/operations/summary/dashboard'),
+          api.get('/operations/summary/groups-balance')
+        ]);
+        setOperationsSummary(summaryRes.data);
+        setGroupsBalance(balanceRes.data);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -37,20 +43,10 @@ const Dashboard = () => {
     }
   };
 
-  // Balance total: corrientes suman balance, crédito/confirming suman disponible
-  const totalBalance = accounts.reduce((sum, acc) => {
-    if (acc.account_type === 'corriente') {
-      return sum + parseFloat(acc.balance);
-    } else {
-      // Para crédito y confirming, sumar el disponible
-      return sum + parseFloat(acc.available);
-    }
-  }, 0);
-
-  const formatCurrency = (amount, currency = 'EUR') => {
+  const formatCurrency = (amount) => {
     return new Intl.NumberFormat('es-ES', {
       style: 'currency',
-      currency: currency,
+      currency: 'EUR',
     }).format(amount);
   };
 
@@ -63,14 +59,25 @@ const Dashboard = () => {
     });
   };
 
-  const getTransactionIcon = (type) => {
-    switch (type) {
-      case 'deposit':
-        return <ArrowDownLeft className="text-green" />;
-      case 'withdrawal':
-        return <ArrowUpRight className="text-red" />;
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="text-green" size={18} />;
+      case 'cancelled':
+        return <XCircle className="text-red" size={18} />;
       default:
-        return <RefreshCw className="text-blue" />;
+        return <Clock className="text-yellow" size={18} />;
+    }
+  };
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'completed':
+        return 'Completada';
+      case 'cancelled':
+        return 'Cancelada';
+      default:
+        return 'Abierta';
     }
   };
 
@@ -83,12 +90,29 @@ const Dashboard = () => {
     );
   }
 
+  // Si no es supervisor, mostrar mensaje simple
+  if (!isSupervisor()) {
+    return (
+      <div className="dashboard">
+        <header className="page-header">
+          <div>
+            <h1>Bienvenido, {user?.full_name}</h1>
+            <p>Panel de usuario</p>
+          </div>
+        </header>
+        <div className="card">
+          <p>Accede a las empresas y cuentas desde el menú lateral.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard">
       <header className="page-header">
         <div>
           <h1>Bienvenido, {user?.full_name}</h1>
-          <p>Resumen de tus finanzas</p>
+          <p>Resumen de operaciones</p>
         </div>
         <button className="btn btn-secondary" onClick={fetchData}>
           <RefreshCw size={18} />
@@ -96,102 +120,133 @@ const Dashboard = () => {
         </button>
       </header>
 
+      {/* Stats de operaciones */}
       <div className="stats-grid">
-        <div className="stat-card primary">
+        <div className="stat-card warning">
           <div className="stat-icon">
-            <TrendingUp size={24} />
+            <Clock size={24} />
           </div>
           <div className="stat-content">
-            <span className="stat-label">Balance Total</span>
-            <span className="stat-value">{formatCurrency(totalBalance)}</span>
+            <span className="stat-label">Operaciones Abiertas</span>
+            <span className="stat-value">{operationsSummary?.counts?.open || 0}</span>
+          </div>
+        </div>
+
+        <div className="stat-card success">
+          <div className="stat-icon">
+            <CheckCircle size={24} />
+          </div>
+          <div className="stat-content">
+            <span className="stat-label">Completadas</span>
+            <span className="stat-value">{operationsSummary?.counts?.completed || 0}</span>
           </div>
         </div>
 
         <div className="stat-card">
           <div className="stat-icon">
-            <Wallet size={24} />
+            <XCircle size={24} />
           </div>
           <div className="stat-content">
-            <span className="stat-label">Cuentas</span>
-            <span className="stat-value">{accounts.length}</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon">
-            <Building2 size={24} />
-          </div>
-          <div className="stat-content">
-            <span className="stat-label">Empresas</span>
-            <span className="stat-value">
-              {new Set(accounts.map(a => a.company_id)).size}
-            </span>
+            <span className="stat-label">Canceladas</span>
+            <span className="stat-value">{operationsSummary?.counts?.cancelled || 0}</span>
           </div>
         </div>
       </div>
 
       <div className="dashboard-grid">
+        {/* Operaciones Abiertas */}
         <section className="card">
           <div className="card-header">
-            <h2>Cuentas</h2>
-            <Link to="/accounts" className="btn btn-text">Ver todas</Link>
+            <h2><Clock size={20} /> Operaciones Abiertas</h2>
+            <Link to="/operations" className="btn btn-text">Ver todas</Link>
           </div>
-          <div className="accounts-list">
-            {accounts.length === 0 ? (
-              <p className="empty-message">No tienes cuentas asignadas</p>
+          <div className="operations-list">
+            {operationsSummary?.open_operations?.length === 0 ? (
+              <p className="empty-message">No hay operaciones abiertas</p>
             ) : (
-              accounts.slice(0, 5).map((account) => (
-                <div key={account.id} className="account-item">
-                  <div className="account-info">
-                    <span className="account-name">{account.name}</span>
-                    <span className="account-company">{account.company?.name}</span>
+              operationsSummary?.open_operations?.map((op) => (
+                <Link key={op.id} to="/operations" className="operation-item">
+                  <div className="operation-item-info">
+                    <span className="operation-item-name">{op.name}</span>
+                    <span className="operation-item-meta">
+                      {op.transaction_count} transferencias • {formatDate(op.created_at)}
+                    </span>
                   </div>
-                  <span className="account-balance">
-                    {account.account_type === 'corriente' 
-                      ? formatCurrency(account.balance, account.currency)
-                      : formatCurrency(account.available, account.currency)
-                    }
-                  </span>
-                </div>
+                  <ArrowRight size={18} className="text-muted" />
+                </Link>
               ))
             )}
           </div>
         </section>
 
+        {/* Balance entre Grupos */}
         <section className="card">
           <div className="card-header">
-            <h2>Últimas Transacciones</h2>
-            <Link to="/transactions" className="btn btn-text">Ver todas</Link>
+            <h2><FolderTree size={20} /> Balance entre Grupos</h2>
           </div>
-          <div className="transactions-list">
-            {transactions.length === 0 ? (
-              <p className="empty-message">No hay transacciones</p>
+          <div className="groups-balance-list">
+            {groupsBalance.length === 0 ? (
+              <p className="empty-message">No hay movimientos entre grupos</p>
             ) : (
-              transactions.map((tx) => (
-                <div key={tx.id} className="transaction-item">
-                  <div className="transaction-icon">
-                    {getTransactionIcon(tx.transaction_type)}
+              groupsBalance.map((group) => (
+                <div key={group.group_id} className="group-balance-item">
+                  <div className="group-balance-info">
+                    <span className="group-balance-name">{group.group_name}</span>
                   </div>
-                  <div className="transaction-info">
-                    <span className="transaction-desc">
-                      {tx.description || tx.transaction_type}
-                    </span>
-                    <span className="transaction-date">{formatDate(tx.created_at)}</span>
-                  </div>
-                  <span className={`transaction-amount ${
-                    tx.transaction_type === 'deposit' ? 'positive' : 
-                    tx.transaction_type === 'withdrawal' ? 'negative' : ''
-                  }`}>
-                    {tx.transaction_type === 'deposit' ? '+' : 
-                     tx.transaction_type === 'withdrawal' ? '-' : ''}
-                    {formatCurrency(tx.amount)}
+                  <span className={`group-balance-amount ${group.balance >= 0 ? 'positive' : 'negative'}`}>
+                    {group.balance >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                    {formatCurrency(Math.abs(group.balance))}
                   </span>
                 </div>
               ))
             )}
           </div>
+          {groupsBalance.length > 0 && (
+            <p className="balance-explanation">
+              Balance positivo = el grupo ha recibido más de lo que ha enviado
+            </p>
+          )}
         </section>
       </div>
+
+      {/* Últimas Operaciones */}
+      <section className="card">
+        <div className="card-header">
+          <h2><GitBranch size={20} /> Últimas Operaciones</h2>
+          <Link to="/operations" className="btn btn-text">Ver todas</Link>
+        </div>
+        <div className="recent-operations-list">
+          {operationsSummary?.recent_operations?.length === 0 ? (
+            <p className="empty-message">No hay operaciones</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Operación</th>
+                  <th>Estado</th>
+                  <th>Última actualización</th>
+                </tr>
+              </thead>
+              <tbody>
+                {operationsSummary?.recent_operations?.map((op) => (
+                  <tr key={op.id}>
+                    <td>
+                      <Link to="/operations" className="operation-link">{op.name}</Link>
+                    </td>
+                    <td>
+                      <div className="status-badge-inline">
+                        {getStatusIcon(op.status)}
+                        <span>{getStatusLabel(op.status)}</span>
+                      </div>
+                    </td>
+                    <td className="text-muted">{formatDate(op.updated_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
     </div>
   );
 };
