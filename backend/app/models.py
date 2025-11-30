@@ -123,6 +123,7 @@ class Operation(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     description = Column(String)
+    notes = Column(String)  # Notas/observaciones editables
     status = Column(String(20), default="open")
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at = Column(DateTime, server_default=func.now())

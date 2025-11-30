@@ -188,6 +188,7 @@ class PermissionWithDetails(PermissionResponse):
 class OperationBase(BaseModel):
     name: str
     description: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class OperationCreate(OperationBase):
@@ -197,6 +198,7 @@ class OperationCreate(OperationBase):
 class OperationUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    notes: Optional[str] = None
     status: Optional[str] = None
 
 

@@ -28,6 +28,7 @@ def create_operation(
     operation = Operation(
         name=operation_data.name,
         description=operation_data.description,
+        notes=operation_data.notes,
         status="open",
         created_by=current_user.id
     )
@@ -187,9 +188,17 @@ def update_operation(
     
     # Si se está cerrando la operación, registrar la fecha
     if "status" in update_data:
-        if update_data["status"] in ["completed", "cancelled"] and operation.status == "open":
+        new_status = update_data["status"]
+        if new_status in ["completed", "cancelled"] and operation.status == "open":
             operation.closed_at = datetime.utcnow()
-        elif update_data["status"] == "open":
+            
+            # Si se cancela, desasignar todas las transacciones
+            if new_status == "cancelled":
+                db.query(Transaction).filter(
+                    Transaction.operation_id == operation_id
+                ).update({"operation_id": None})
+                
+        elif new_status == "open":
             operation.closed_at = None
     
     for field, value in update_data.items():
@@ -207,7 +216,7 @@ def delete_operation(
     current_user: User = Depends(get_current_supervisor),
     db: Session = Depends(get_db)
 ):
-    """Eliminar una operación (solo si no tiene transacciones)."""
+    """Eliminar una operación y desasignar sus transacciones."""
     operation = db.query(Operation).filter(Operation.id == operation_id).first()
     
     if not operation:
@@ -216,12 +225,10 @@ def delete_operation(
             detail="Operación no encontrada"
         )
     
-    # Verificar que no tenga transacciones
-    if db.query(Transaction).filter(Transaction.operation_id == operation_id).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No se puede eliminar una operación con transacciones asociadas"
-        )
+    # Desasignar transacciones
+    db.query(Transaction).filter(
+        Transaction.operation_id == operation_id
+    ).update({"operation_id": None})
     
     db.delete(operation)
     db.commit()

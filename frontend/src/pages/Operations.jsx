@@ -10,7 +10,9 @@ import {
   Clock,
   ArrowRight,
   FolderTree,
-  FileDown
+  FileDown,
+  Edit,
+  Trash2
 } from 'lucide-react';
 
 const Operations = () => {
@@ -20,9 +22,11 @@ const Operations = () => {
   const [showModal, setShowModal] = useState(false);
   const [showFlowModal, setShowFlowModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedOperation, setSelectedOperation] = useState(null);
   const [flowData, setFlowData] = useState(null);
-  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', notes: '' });
+  const [editData, setEditData] = useState({ name: '', description: '', notes: '' });
   const [transferData, setTransferData] = useState({
     from_account_id: '',
     to_account_id: '',
@@ -59,10 +63,49 @@ const Operations = () => {
     try {
       await api.post('/operations/', formData);
       setShowModal(false);
-      setFormData({ name: '', description: '' });
+      setFormData({ name: '', description: '', notes: '' });
       fetchData();
     } catch (err) {
       setError(err.response?.data?.detail || 'Error al crear operación');
+    }
+  };
+
+  const openEditModal = (operation) => {
+    setSelectedOperation(operation);
+    setEditData({
+      name: operation.name,
+      description: operation.description || '',
+      notes: operation.notes || ''
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    try {
+      await api.patch(`/operations/${selectedOperation.id}`, editData);
+      setShowEditModal(false);
+      setSelectedOperation(null);
+      fetchData();
+      // Si el modal de flujo está abierto, actualizarlo
+      if (showFlowModal && flowData && flowData.operation.id === selectedOperation.id) {
+        viewFlow(selectedOperation.id);
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Error al actualizar operación');
+    }
+  };
+
+  const handleDeleteOperation = async (operation) => {
+    if (!confirm(`¿Eliminar la operación "${operation.name}"? Las transacciones serán desasignadas.`)) return;
+
+    try {
+      await api.delete(`/operations/${operation.id}`);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Error al eliminar operación');
     }
   };
 
@@ -227,6 +270,13 @@ const Operations = () => {
           </div>
         </div>
 
+        ${operation.notes ? `
+        <div class="section">
+          <h2>Notas / Observaciones</h2>
+          <p style="white-space: pre-wrap; font-size: 14px;">${operation.notes}</p>
+        </div>
+        ` : ''}
+
         ${edges.length > 0 ? `
         <div class="section">
           <h2>Detalle de Transferencias</h2>
@@ -380,6 +430,10 @@ const Operations = () => {
               {operation.description && (
                 <p className="operation-description">{operation.description}</p>
               )}
+
+              {operation.notes && (
+                <p className="operation-notes">{operation.notes}</p>
+              )}
               
               <div className="operation-meta">
                 <span>Creada: {formatDate(operation.created_at)}</span>
@@ -392,6 +446,9 @@ const Operations = () => {
                 <button className="btn btn-secondary" onClick={() => viewFlow(operation.id)}>
                   <Eye size={16} />
                   Ver Flujo
+                </button>
+                <button className="btn btn-icon" onClick={() => openEditModal(operation)} title="Editar">
+                  <Edit size={16} />
                 </button>
                 {operation.status === 'open' && (
                   <>
@@ -414,12 +471,21 @@ const Operations = () => {
                   </>
                 )}
                 {operation.status !== 'open' && (
-                  <button 
-                    className="btn btn-secondary btn-small"
-                    onClick={() => updateStatus(operation.id, 'open')}
-                  >
-                    Reabrir
-                  </button>
+                  <>
+                    <button 
+                      className="btn btn-secondary btn-small"
+                      onClick={() => updateStatus(operation.id, 'open')}
+                    >
+                      Reabrir
+                    </button>
+                    <button 
+                      className="btn btn-icon danger"
+                      onClick={() => handleDeleteOperation(operation)}
+                      title="Eliminar"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -459,6 +525,17 @@ const Operations = () => {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Describe el propósito de esta operación..."
+                  rows={2}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="notes">Notas / Observaciones</label>
+                <textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Notas adicionales..."
                   rows={3}
                 />
               </div>
@@ -469,6 +546,64 @@ const Operations = () => {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   Crear Operación
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Operación */}
+      {showEditModal && selectedOperation && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Editar Operación</h2>
+              <button className="btn btn-icon" onClick={() => setShowEditModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              {error && <div className="error-message">{error}</div>}
+              
+              <div className="form-group">
+                <label htmlFor="edit-name">Nombre de la operación</label>
+                <input
+                  type="text"
+                  id="edit-name"
+                  value={editData.name}
+                  onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-description">Descripción</label>
+                <textarea
+                  id="edit-description"
+                  value={editData.description}
+                  onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+                  rows={2}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-notes">Notas / Observaciones</label>
+                <textarea
+                  id="edit-notes"
+                  value={editData.notes}
+                  onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
+                  placeholder="Añade notas o información adicional..."
+                  rows={4}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Guardar
                 </button>
               </div>
             </form>
