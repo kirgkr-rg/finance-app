@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -17,6 +17,7 @@ import {
 
 const Dashboard = () => {
   const { user, isSupervisor } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [operationsSummary, setOperationsSummary] = useState(null);
   const [groupsBalance, setGroupsBalance] = useState([]);
@@ -189,7 +190,11 @@ const Dashboard = () => {
               <p className="empty-message">No hay movimientos entre grupos</p>
             ) : (
               groupsBalance.map((group) => (
-                <div key={group.group_id} className="group-balance-item">
+                <div 
+                  key={group.group_id} 
+                  className="group-balance-item clickable"
+                  onClick={() => navigate(`/companies?group=${group.group_id}`)}
+                >
                   <div className="group-balance-info">
                     <span className="group-balance-name">{group.group_name}</span>
                   </div>
@@ -210,7 +215,7 @@ const Dashboard = () => {
       </div>
 
       {/* Últimas Operaciones */}
-      <section className="card">
+      <section className="card last-operations-card">
         <div className="card-header">
           <h2><GitBranch size={20} /> Últimas Operaciones</h2>
           <Link to="/operations" className="btn btn-text">Ver todas</Link>

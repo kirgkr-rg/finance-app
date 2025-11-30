@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Building2, Plus, Edit, Trash2, X, Eye, FolderTree } from 'lucide-react';
 
 const Companies = () => {
   const { isSupervisor } = useAuth();
+  const [searchParams] = useSearchParams();
   const [companies, setCompanies] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,8 +20,13 @@ const Companies = () => {
   const [selectedGroupFilter, setSelectedGroupFilter] = useState('all');
 
   useEffect(() => {
+    // Leer grupo de la URL si existe
+    const groupFromUrl = searchParams.get('group');
+    if (groupFromUrl) {
+      setSelectedGroupFilter(groupFromUrl);
+    }
     fetchData();
-  }, []);
+  }, [searchParams]);
 
   const fetchData = async () => {
     try {
