@@ -74,3 +74,32 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def get_me(current_user: User = Depends(get_current_user)):
     """Obtener información del usuario actual."""
     return current_user
+
+
+@router.post("/change-password")
+def change_password(
+    current_password: str,
+    new_password: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Cambiar la contraseña del usuario actual."""
+    # Verificar contraseña actual
+    if not verify_password(current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual es incorrecta"
+        )
+    
+    # Validar nueva contraseña
+    if len(new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La nueva contraseña debe tener al menos 6 caracteres"
+        )
+    
+    # Actualizar contraseña
+    current_user.password_hash = get_password_hash(new_password)
+    db.commit()
+    
+    return {"message": "Contraseña actualizada correctamente"}
