@@ -273,7 +273,6 @@ const Accounts = () => {
                   <thead>
                     <tr>
                       <th>Nombre</th>
-                      <th>IBAN</th>
                       <th>Tipo</th>
                       <th>Moneda</th>
                       <th className="text-right">Saldo</th>
@@ -290,7 +289,6 @@ const Accounts = () => {
                             {account.name}
                           </div>
                         </td>
-                        <td className="iban-cell">{account.iban || '-'}</td>
                         <td>
                           <span className={`account-type-badge ${account.account_type}`}>
                             {getAccountTypeLabel(account.account_type)}
