@@ -552,3 +552,70 @@ def update_transaction(
     db.refresh(transaction)
     
     return transaction
+
+
+@router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_transaction(
+    transaction_id: UUID,
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """
+    Eliminar una transacción (solo supervisores).
+    Solo se puede eliminar si es la última transacción de las cuentas involucradas.
+    Revierte los saldos de las cuentas afectadas.
+    """
+    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    
+    if not transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transacción no encontrada"
+        )
+    
+    # Verificar que es la última transacción de cada cuenta involucrada
+    def is_last_transaction(account_id: UUID) -> bool:
+        if not account_id:
+            return True
+        
+        later_tx = db.query(Transaction).filter(
+            or_(
+                Transaction.from_account_id == account_id,
+                Transaction.to_account_id == account_id
+            ),
+            Transaction.created_at > transaction.created_at,
+            Transaction.id != transaction.id
+        ).first()
+        
+        return later_tx is None
+    
+    if not is_last_transaction(transaction.from_account_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo se puede eliminar la última transacción de cada cuenta"
+        )
+    
+    if not is_last_transaction(transaction.to_account_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo se puede eliminar la última transacción de cada cuenta"
+        )
+    
+    # Revertir saldos de las cuentas
+    if transaction.from_account_id:
+        from_account = db.query(Account).filter(Account.id == transaction.from_account_id).first()
+        if from_account:
+            # Devolver el dinero a la cuenta origen
+            if transaction.transaction_type in ['transfer', 'withdrawal', 'confirming_settlement']:
+                from_account.balance += transaction.amount
+    
+    if transaction.to_account_id:
+        to_account = db.query(Account).filter(Account.id == transaction.to_account_id).first()
+        if to_account:
+            # Quitar el dinero de la cuenta destino
+            if transaction.transaction_type in ['transfer', 'deposit', 'confirming_settlement']:
+                to_account.balance -= transaction.amount
+    
+    # Eliminar la transacción
+    db.delete(transaction)
+    db.commit()

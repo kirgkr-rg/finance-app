@@ -381,6 +381,18 @@ const Transactions = () => {
     }
   };
 
+  const handleDeleteTransaction = async () => {
+    if (!confirm('¿Eliminar esta transacción? Se revertirán los saldos de las cuentas afectadas.')) return;
+
+    try {
+      await api.delete(`/transactions/${transactionToEdit.id}`);
+      closeEditModal();
+      fetchData();
+    } catch (error) {
+      setEditError(error.response?.data?.detail || 'Error al eliminar transacción');
+    }
+  };
+
   // Filtrar cuentas por tipo
   const confirmingAccounts = accounts.filter(a => a.account_type === 'confirming');
   const corrienteAccounts = accounts.filter(a => a.account_type === 'corriente');
@@ -850,12 +862,22 @@ const Transactions = () => {
               </div>
 
               <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={closeEditModal}>
-                  Cancelar
+                <button 
+                  type="button" 
+                  className="btn btn-danger" 
+                  onClick={handleDeleteTransaction}
+                >
+                  <Trash2 size={16} />
+                  Eliminar
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Guardar Cambios
-                </button>
+                <div className="modal-actions-right">
+                  <button type="button" className="btn btn-secondary" onClick={closeEditModal}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    Guardar Cambios
+                  </button>
+                </div>
               </div>
             </form>
           </div>
