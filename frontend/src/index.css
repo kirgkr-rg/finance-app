@@ -843,6 +843,12 @@ body {
   color: var(--primary);
 }
 
+.iban-cell {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
 .balance {
   font-weight: 600;
 }

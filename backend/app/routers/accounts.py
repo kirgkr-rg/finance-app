@@ -57,6 +57,7 @@ def create_account(
     account = Account(
         company_id=account_data.company_id,
         name=account_data.name,
+        iban=account_data.iban,
         account_type=account_data.account_type,
         currency=account_data.currency,
         balance=initial_balance,

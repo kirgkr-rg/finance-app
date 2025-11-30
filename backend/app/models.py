@@ -68,6 +68,7 @@ class Account(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"))
     name = Column(String(255), nullable=False)
+    iban = Column(String(34), nullable=True)  # IBAN máximo 34 caracteres
     account_type = Column(String(20), default="corriente")
     balance = Column(Numeric(15, 2), default=0.00)
     credit_limit = Column(Numeric(15, 2), default=0.00)  # Para crédito y confirming

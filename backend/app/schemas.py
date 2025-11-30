@@ -115,6 +115,7 @@ class CompanyWithAccounts(CompanyResponse):
 
 class AccountBase(BaseModel):
     name: str
+    iban: Optional[str] = None
     account_type: str = "corriente"
     currency: str = "EUR"
 
@@ -128,6 +129,7 @@ class AccountCreate(AccountBase):
 
 class AccountUpdate(BaseModel):
     name: Optional[str] = None
+    iban: Optional[str] = None
     credit_limit: Optional[Decimal] = None
     initial_available: Optional[Decimal] = None  # Para ajustar el disponible
     is_active: Optional[bool] = None

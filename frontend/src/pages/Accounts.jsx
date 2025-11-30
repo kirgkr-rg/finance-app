@@ -12,6 +12,7 @@ const Accounts = () => {
   const [editingAccount, setEditingAccount] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
+    iban: '',
     company_id: '',
     account_type: 'corriente',
     currency: 'EUR',
@@ -48,6 +49,7 @@ const Accounts = () => {
       if (editingAccount) {
         const updateData = {
           name: formData.name,
+          iban: formData.iban || null,
           credit_limit: parseFloat(formData.credit_limit)
         };
         if (formData.initial_available !== '') {
@@ -55,22 +57,23 @@ const Accounts = () => {
         }
         await api.patch(`/accounts/${editingAccount.id}`, updateData);
       } else {
-  const createData = {
-    name: formData.name,
-    company_id: formData.company_id,
-    account_type: formData.account_type,
-    currency: formData.currency,
-    initial_balance: parseFloat(formData.initial_balance) || 0,
-    credit_limit: parseFloat(formData.credit_limit) || 0
-  };
-  if (formData.initial_available !== '' && formData.initial_available !== null) {
-    createData.initial_available = parseFloat(formData.initial_available);
-  }
-  await api.post('/accounts/', createData);
-}
+        const createData = {
+          name: formData.name,
+          iban: formData.iban || null,
+          company_id: formData.company_id,
+          account_type: formData.account_type,
+          currency: formData.currency,
+          initial_balance: parseFloat(formData.initial_balance) || 0,
+          credit_limit: parseFloat(formData.credit_limit) || 0
+        };
+        if (formData.initial_available !== '' && formData.initial_available !== null) {
+          createData.initial_available = parseFloat(formData.initial_available);
+        }
+        await api.post('/accounts/', createData);
+      }
       setShowModal(false);
       setEditingAccount(null);
-      setFormData({ name: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0', initial_available: '' });
+      setFormData({ name: '', iban: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0', initial_available: '' });
       fetchData();
     } catch (err) {
       const detail = err.response?.data?.detail;
@@ -89,6 +92,7 @@ const Accounts = () => {
     setEditingAccount(account);
     setFormData({
       name: account.name,
+      iban: account.iban || '',
       company_id: account.company_id,
       account_type: account.account_type,
       currency: account.currency,
@@ -117,7 +121,7 @@ const Accounts = () => {
 
   const openNewModal = () => {
     setEditingAccount(null);
-    setFormData({ name: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0', initial_available: '' });
+    setFormData({ name: '', iban: '', company_id: '', account_type: 'corriente', currency: 'EUR', initial_balance: '0', credit_limit: '0', initial_available: '' });
     setShowModal(true);
   };
 
@@ -183,6 +187,7 @@ const Accounts = () => {
                 <thead>
                   <tr>
                     <th>Nombre</th>
+                    <th>IBAN</th>
                     <th>Tipo</th>
                     <th>Moneda</th>
                     <th className="text-right">Saldo</th>
@@ -199,6 +204,7 @@ const Accounts = () => {
                           {account.name}
                         </div>
                       </td>
+                      <td className="iban-cell">{account.iban || '-'}</td>
                       <td>
                         <span className={`account-type-badge ${account.account_type}`}>
                           {getAccountTypeLabel(account.account_type)}
@@ -276,6 +282,18 @@ const Accounts = () => {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Ej: Cuenta Principal"
                   required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="iban">IBAN (opcional)</label>
+                <input
+                  type="text"
+                  id="iban"
+                  value={formData.iban}
+                  onChange={(e) => setFormData({ ...formData, iban: e.target.value.toUpperCase() })}
+                  placeholder="ES00 0000 0000 0000 0000 0000"
+                  maxLength={34}
                 />
               </div>
 
