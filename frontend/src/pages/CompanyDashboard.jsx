@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import {
   Building2,
   Wallet,
@@ -19,11 +20,13 @@ import {
   Download,
   Trash2,
   FileText,
-  Eye
+  Eye,
+  GitBranch
 } from 'lucide-react';
 
 const CompanyDashboard = () => {
   const { companyId } = useParams();
+  const { isSupervisor } = useAuth();
   const [company, setCompany] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -35,6 +38,10 @@ const CompanyDashboard = () => {
   const [attachments, setAttachments] = useState([]);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [transactionToAssign, setTransactionToAssign] = useState(null);
+  const [operations, setOperations] = useState([]);
+  const [selectedOperationId, setSelectedOperationId] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -238,6 +245,46 @@ const CompanyDashboard = () => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const openAssignModal = async (transaction) => {
+    setTransactionToAssign(transaction);
+    setSelectedOperationId(transaction.operation_id || '');
+    try {
+      const response = await api.get('/operations/?status=open');
+      setOperations(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+      setOperations([]);
+    }
+    setShowAssignModal(true);
+  };
+
+  const closeAssignModal = () => {
+    setShowAssignModal(false);
+    setTransactionToAssign(null);
+    setSelectedOperationId('');
+  };
+
+  const handleAssignOperation = async () => {
+    try {
+      await api.patch(
+        `/transactions/${transactionToAssign.id}/assign-operation`,
+        null,
+        { params: { operation_id: selectedOperationId || null } }
+      );
+      
+      // Actualizar la transacción en la lista
+      setAccountTransactions(accountTransactions.map(tx => 
+        tx.id === transactionToAssign.id 
+          ? { ...tx, operation_id: selectedOperationId || null }
+          : tx
+      ));
+      
+      closeAssignModal();
+    } catch (error) {
+      alert(error.response?.data?.detail || 'Error al asignar operación');
+    }
   };
 
   const getTransactionIcon = (type) => {
@@ -602,16 +649,31 @@ const CompanyDashboard = () => {
                               ) : '-'}
                             </td>
                             <td>
-                              <button 
-                                className="btn btn-icon btn-sm" 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  viewTransactionAttachments(tx);
-                                }}
-                                title="Ver adjuntos"
-                              >
-                                <Paperclip size={16} />
-                              </button>
+                              <div className="table-actions">
+                                <button 
+                                  className="btn btn-icon btn-sm" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    viewTransactionAttachments(tx);
+                                  }}
+                                  title="Ver adjuntos"
+                                >
+                                  <Paperclip size={16} />
+                                </button>
+                                {isSupervisor() && (
+                                  <button 
+                                    className="btn btn-icon btn-sm" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openAssignModal(tx);
+                                    }}
+                                    title={tx.operation_id ? "Cambiar operación" : "Asignar a operación"}
+                                    className={`btn btn-icon btn-sm ${tx.operation_id ? 'has-operation' : ''}`}
+                                  >
+                                    <GitBranch size={16} />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -624,6 +686,50 @@ const CompanyDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Asignar Operación */}
+      {showAssignModal && transactionToAssign && (
+        <div className="modal-overlay" onClick={closeAssignModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Asignar a Operación</h2>
+              <button className="btn btn-icon" onClick={closeAssignModal}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="info-box">
+                <strong>Transacción:</strong> {transactionToAssign.description || 'Sin descripción'}<br />
+                <strong>Importe:</strong> {formatCurrency(transactionToAssign.amount)}
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="operation_id">Operación</label>
+                <select
+                  id="operation_id"
+                  value={selectedOperationId}
+                  onChange={(e) => setSelectedOperationId(e.target.value)}
+                >
+                  <option value="">Sin operación</option>
+                  {operations.map((op) => (
+                    <option key={op.id} value={op.id}>{op.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={closeAssignModal}>
+                  Cancelar
+                </button>
+                <button className="btn btn-primary" onClick={handleAssignOperation}>
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Adjuntos */}
       {selectedTransaction && (
         <div className="modal-overlay" onClick={closeAttachmentsModal}>

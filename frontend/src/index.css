@@ -1667,3 +1667,14 @@ body {
 .btn-sm {
   padding: 0.25rem 0.5rem;
 }
+
+/* Table actions */
+.table-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.btn-icon.has-operation {
+  color: var(--primary);
+  background: rgba(99, 102, 241, 0.1);
+}

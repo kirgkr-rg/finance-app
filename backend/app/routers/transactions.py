@@ -378,3 +378,48 @@ def get_transaction(
             )
     
     return transaction
+
+
+@router.patch("/{transaction_id}/assign-operation", response_model=TransactionResponse)
+def assign_transaction_to_operation(
+    transaction_id: UUID,
+    operation_id: UUID = None,
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """Asignar o desasignar una transacción a una operación (solo supervisores)."""
+    from app.models import Operation
+    
+    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    
+    if not transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transacción no encontrada"
+        )
+    
+    if operation_id:
+        # Verificar que la operación existe y está abierta
+        operation = db.query(Operation).filter(Operation.id == operation_id).first()
+        
+        if not operation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Operación no encontrada"
+            )
+        
+        if operation.status != "open":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Solo se puede asignar a operaciones abiertas"
+            )
+        
+        transaction.operation_id = operation_id
+    else:
+        # Desasignar de operación
+        transaction.operation_id = None
+    
+    db.commit()
+    db.refresh(transaction)
+    
+    return transaction
