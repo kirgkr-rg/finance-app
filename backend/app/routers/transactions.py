@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models import User, Account, AccountPermission, Transaction
 from app.schemas import (
     TransferCreate, DepositCreate, WithdrawalCreate, ConfirmingSettlementCreate,
-    TransactionResponse, TransactionWithAccounts
+    TransactionResponse, TransactionWithAccounts, TransactionUpdate
 )
 from app.auth import get_current_user, get_current_supervisor, check_account_permission
 
@@ -428,3 +428,127 @@ def assign_transaction_to_operation(
     db.refresh(transaction)
     
     return transaction
+
+
+@router.patch("/{transaction_id}", response_model=TransactionResponse)
+def update_transaction(
+    transaction_id: UUID,
+    update_data: TransactionUpdate,
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """
+    Editar una transacción (solo supervisores).
+    Solo se puede editar si es la última transacción de las cuentas involucradas.
+    """
+    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    
+    if not transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transacción no encontrada"
+        )
+    
+    # Verificar que es la última transacción de cada cuenta involucrada
+    def is_last_transaction(account_id: UUID) -> bool:
+        if not account_id:
+            return True
+        
+        # Buscar si hay transacciones posteriores en esta cuenta
+        later_tx = db.query(Transaction).filter(
+            or_(
+                Transaction.from_account_id == account_id,
+                Transaction.to_account_id == account_id
+            ),
+            Transaction.created_at > transaction.created_at,
+            Transaction.id != transaction.id
+        ).first()
+        
+        return later_tx is None
+    
+    if not is_last_transaction(transaction.from_account_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo se puede editar la última transacción de cada cuenta"
+        )
+    
+    if not is_last_transaction(transaction.to_account_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo se puede editar la última transacción de cada cuenta"
+        )
+    
+    # Obtener cuentas involucradas
+    from_account = None
+    to_account = None
+    
+    if transaction.from_account_id:
+        from_account = db.query(Account).filter(Account.id == transaction.from_account_id).first()
+    if transaction.to_account_id:
+        to_account = db.query(Account).filter(Account.id == transaction.to_account_id).first()
+    
+    # Si cambia el importe, recalcular saldos
+    if update_data.amount is not None and update_data.amount != transaction.amount:
+        old_amount = transaction.amount
+        new_amount = update_data.amount
+        difference = new_amount - old_amount
+        
+        # Ajustar saldos según tipo de transacción
+        if transaction.transaction_type in ['transfer', 'withdrawal', 'confirming_settlement']:
+            if from_account:
+                from_account.balance -= difference
+                transaction.from_balance_after = from_account.balance
+        
+        if transaction.transaction_type in ['transfer', 'deposit', 'confirming_settlement']:
+            if to_account:
+                to_account.balance += difference
+                transaction.to_balance_after = to_account.balance
+        
+        transaction.amount = new_amount
+    
+    # Actualizar otros campos
+    if update_data.description is not None:
+        transaction.description = update_data.description
+    
+    if update_data.transaction_date is not None:
+        transaction.transaction_date = update_data.transaction_date
+    
+    db.commit()
+    db.refresh(transaction)
+    
+    return transaction
+
+
+@router.get("/{transaction_id}/can-edit")
+def can_edit_transaction(
+    transaction_id: UUID,
+    current_user: User = Depends(get_current_supervisor),
+    db: Session = Depends(get_db)
+):
+    """Verificar si una transacción se puede editar."""
+    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    
+    if not transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transacción no encontrada"
+        )
+    
+    def is_last_transaction(account_id: UUID) -> bool:
+        if not account_id:
+            return True
+        
+        later_tx = db.query(Transaction).filter(
+            or_(
+                Transaction.from_account_id == account_id,
+                Transaction.to_account_id == account_id
+            ),
+            Transaction.created_at > transaction.created_at,
+            Transaction.id != transaction.id
+        ).first()
+        
+        return later_tx is None
+    
+    can_edit = is_last_transaction(transaction.from_account_id) and is_last_transaction(transaction.to_account_id)
+    
+    return {"can_edit": can_edit}

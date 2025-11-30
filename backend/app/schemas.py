@@ -293,6 +293,13 @@ class TransactionResponse(TransactionBase):
         from_attributes = True
 
 
+class TransactionUpdate(BaseModel):
+    """Schema para editar una transacción (solo la última de cada cuenta)."""
+    amount: Optional[Decimal] = Field(None, gt=0)
+    description: Optional[str] = None
+    transaction_date: Optional[datetime] = None
+
+
 class TransactionWithAccounts(TransactionResponse):
     from_account: Optional[AccountWithCompany] = None
     to_account: Optional[AccountWithCompany] = None

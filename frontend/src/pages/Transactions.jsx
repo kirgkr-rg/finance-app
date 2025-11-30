@@ -15,7 +15,8 @@ import {
   Download,
   Trash2,
   FileText,
-  Eye
+  Eye,
+  Edit
 } from 'lucide-react';
 
 const Transactions = () => {
@@ -48,6 +49,16 @@ const Transactions = () => {
   const [transactionToAssign, setTransactionToAssign] = useState(null);
   const [operations, setOperations] = useState([]);
   const [selectedOperationId, setSelectedOperationId] = useState('');
+
+  // Estado para editar transacción
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [transactionToEdit, setTransactionToEdit] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    amount: '',
+    description: '',
+    transaction_date: ''
+  });
+  const [editError, setEditError] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -317,6 +328,59 @@ const Transactions = () => {
     }
   };
 
+  // Funciones para editar transacción
+  const openEditModal = async (transaction) => {
+    try {
+      const response = await api.get(`/transactions/${transaction.id}/can-edit`);
+      if (!response.data.can_edit) {
+        alert('Solo se puede editar la última transacción de cada cuenta');
+        return;
+      }
+      
+      setTransactionToEdit(transaction);
+      setEditFormData({
+        amount: transaction.amount,
+        description: transaction.description || '',
+        transaction_date: transaction.transaction_date 
+          ? new Date(transaction.transaction_date).toISOString().split('T')[0]
+          : new Date(transaction.created_at).toISOString().split('T')[0]
+      });
+      setEditError('');
+      setShowEditModal(true);
+    } catch (error) {
+      alert(error.response?.data?.detail || 'Error al verificar transacción');
+    }
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setTransactionToEdit(null);
+    setEditFormData({ amount: '', description: '', transaction_date: '' });
+    setEditError('');
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditError('');
+
+    try {
+      const payload = {
+        amount: parseFloat(editFormData.amount),
+        description: editFormData.description,
+        transaction_date: editFormData.transaction_date 
+          ? new Date(editFormData.transaction_date).toISOString() 
+          : null
+      };
+
+      await api.patch(`/transactions/${transactionToEdit.id}`, payload);
+      
+      closeEditModal();
+      fetchData(); // Recargar para actualizar saldos
+    } catch (error) {
+      setEditError(error.response?.data?.detail || 'Error al actualizar transacción');
+    }
+  };
+
   // Filtrar cuentas por tipo
   const confirmingAccounts = accounts.filter(a => a.account_type === 'confirming');
   const corrienteAccounts = accounts.filter(a => a.account_type === 'corriente');
@@ -417,6 +481,13 @@ const Transactions = () => {
                     {isSupervisor() && (
                       <td>
                         <div className="table-actions">
+                          <button 
+                            className="btn btn-icon btn-sm" 
+                            onClick={() => openEditModal(tx)}
+                            title="Editar transacción"
+                          >
+                            <Edit size={16} />
+                          </button>
                           <button 
                             className="btn btn-icon btn-sm" 
                             onClick={() => viewTransactionAttachments(tx)}
@@ -715,6 +786,78 @@ const Transactions = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Transacción */}
+      {showEditModal && transactionToEdit && (
+        <div className="modal-overlay" onClick={closeEditModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Editar Transacción</h2>
+              <button className="btn btn-icon" onClick={closeEditModal}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              {editError && <div className="error-message">{editError}</div>}
+              
+              <div className="info-box">
+                <strong>Tipo:</strong> {getTransactionLabel(transactionToEdit.transaction_type)}<br />
+                {transactionToEdit.from_account && (
+                  <><strong>Origen:</strong> {transactionToEdit.from_account.company?.name} - {transactionToEdit.from_account.name}<br /></>
+                )}
+                {transactionToEdit.to_account && (
+                  <><strong>Destino:</strong> {transactionToEdit.to_account.company?.name} - {transactionToEdit.to_account.name}</>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-amount">Importe</label>
+                <input
+                  type="number"
+                  id="edit-amount"
+                  value={editFormData.amount}
+                  onChange={(e) => setEditFormData({ ...editFormData, amount: e.target.value })}
+                  placeholder="0.00"
+                  min="0.01"
+                  step="0.01"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-date">Fecha del movimiento</label>
+                <input
+                  type="date"
+                  id="edit-date"
+                  value={editFormData.transaction_date}
+                  onChange={(e) => setEditFormData({ ...editFormData, transaction_date: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-description">Descripción</label>
+                <input
+                  type="text"
+                  id="edit-description"
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  placeholder="Concepto"
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={closeEditModal}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
