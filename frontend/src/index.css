@@ -1055,6 +1055,12 @@ body {
   width: 95%;
 }
 
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .flow-content {
   padding: 1.5rem;
 }

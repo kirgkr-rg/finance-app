@@ -9,7 +9,8 @@ import {
   XCircle,
   Clock,
   ArrowRight,
-  FolderTree
+  FolderTree,
+  FileDown
 } from 'lucide-react';
 
 const Operations = () => {
@@ -160,6 +161,169 @@ const Operations = () => {
       default:
         return 'Abierta';
     }
+  };
+
+  const exportToPDF = () => {
+    if (!flowData) return;
+
+    const { operation, edges, nodes, group_nodes } = flowData;
+    
+    // Crear contenido HTML para el PDF
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Operación: ${operation.name}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+          .header { border-bottom: 2px solid #6366f1; padding-bottom: 20px; margin-bottom: 30px; }
+          .header h1 { color: #6366f1; font-size: 24px; margin-bottom: 5px; }
+          .header .subtitle { color: #666; font-size: 14px; }
+          .meta { display: flex; gap: 30px; margin-bottom: 30px; }
+          .meta-item { }
+          .meta-item .label { font-size: 12px; color: #666; text-transform: uppercase; }
+          .meta-item .value { font-size: 16px; font-weight: bold; }
+          .section { margin-bottom: 30px; }
+          .section h2 { font-size: 16px; color: #6366f1; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 15px; }
+          table { width: 100%; border-collapse: collapse; font-size: 13px; }
+          th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+          th { background: #f8f9fa; font-weight: 600; color: #666; }
+          .text-right { text-align: right; }
+          .positive { color: #22c55e; }
+          .negative { color: #ef4444; }
+          .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+          .summary-card { background: #f8f9fa; border-radius: 8px; padding: 15px; }
+          .summary-card h3 { font-size: 14px; margin-bottom: 10px; }
+          .summary-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 11px; color: #666; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>${operation.name}</h1>
+          <div class="subtitle">${operation.description || 'Sin descripción'}</div>
+        </div>
+
+        <div class="meta">
+          <div class="meta-item">
+            <div class="label">Estado</div>
+            <div class="value">${getStatusLabel(operation.status)}</div>
+          </div>
+          <div class="meta-item">
+            <div class="label">Fecha creación</div>
+            <div class="value">${formatDate(operation.created_at)}</div>
+          </div>
+          ${operation.closed_at ? `
+          <div class="meta-item">
+            <div class="label">Fecha cierre</div>
+            <div class="value">${formatDate(operation.closed_at)}</div>
+          </div>
+          ` : ''}
+          <div class="meta-item">
+            <div class="label">Nº Transferencias</div>
+            <div class="value">${edges.length}</div>
+          </div>
+        </div>
+
+        ${edges.length > 0 ? `
+        <div class="section">
+          <h2>Detalle de Transferencias</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Origen</th>
+                <th>Destino</th>
+                <th class="text-right">Importe</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${edges.map(edge => `
+                <tr>
+                  <td>${edge.from_company_name}</td>
+                  <td>${edge.to_company_name}</td>
+                  <td class="text-right">${formatCurrency(edge.amount)}</td>
+                  <td>${formatDate(edge.created_at)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <h2>Resumen por Empresa</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Empresa</th>
+                <th class="text-right">Entradas</th>
+                <th class="text-right">Salidas</th>
+                <th class="text-right">Neto</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${nodes.map(node => `
+                <tr>
+                  <td>${node.company_name}</td>
+                  <td class="text-right positive">+${formatCurrency(node.total_in)}</td>
+                  <td class="text-right negative">-${formatCurrency(node.total_out)}</td>
+                  <td class="text-right ${node.total_in - node.total_out >= 0 ? 'positive' : 'negative'}">
+                    ${formatCurrency(node.total_in - node.total_out)}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        ${group_nodes && group_nodes.length > 0 ? `
+        <div class="section">
+          <h2>Resumen por Grupo</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Grupo</th>
+                <th class="text-right">Entradas</th>
+                <th class="text-right">Salidas</th>
+                <th class="text-right">Neto</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${group_nodes.map(node => `
+                <tr>
+                  <td>${node.group_name}</td>
+                  <td class="text-right positive">+${formatCurrency(node.total_in)}</td>
+                  <td class="text-right negative">-${formatCurrency(node.total_out)}</td>
+                  <td class="text-right ${node.total_in - node.total_out >= 0 ? 'positive' : 'negative'}">
+                    ${formatCurrency(node.total_in - node.total_out)}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        ` : ''}
+        ` : '<p>Esta operación no tiene transferencias.</p>'}
+
+        <div class="footer">
+          Generado el ${new Date().toLocaleString('es-ES')} • Finance App
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Abrir ventana de impresión
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Esperar a que cargue y abrir diálogo de impresión
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   if (loading) {
@@ -318,9 +482,15 @@ const Operations = () => {
           <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Flujo: {flowData.operation.name}</h2>
-              <button className="btn btn-icon" onClick={() => setShowFlowModal(false)}>
-                <X size={20} />
-              </button>
+              <div className="modal-header-actions">
+                <button className="btn btn-secondary" onClick={exportToPDF} title="Exportar PDF">
+                  <FileDown size={18} />
+                  Exportar PDF
+                </button>
+                <button className="btn btn-icon" onClick={() => setShowFlowModal(false)}>
+                  <X size={20} />
+                </button>
+              </div>
             </div>
             <div className="flow-content">
               {flowData.edges.length === 0 ? (
