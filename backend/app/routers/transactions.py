@@ -4,6 +4,7 @@ from sqlalchemy import or_
 from typing import List
 from uuid import UUID
 from decimal import Decimal
+from datetime import datetime
 
 from app.database import get_db
 from app.models import User, Account, AccountPermission, Transaction
@@ -115,6 +116,7 @@ def create_transfer(
         operation_id=transfer_data.operation_id,
         from_balance_after=from_account.balance,
         to_balance_after=to_account.balance,
+        transaction_date=transfer_data.transaction_date or datetime.utcnow(),
         created_by=current_user.id
     )
     
@@ -152,6 +154,7 @@ def create_deposit(
         transaction_type="deposit",
         status="completed",
         to_balance_after=account.balance,
+        transaction_date=deposit_data.transaction_date or datetime.utcnow(),
         created_by=current_user.id
     )
     
@@ -195,6 +198,7 @@ def create_withdrawal(
         transaction_type="withdrawal",
         status="completed",
         from_balance_after=account.balance,
+        transaction_date=withdrawal_data.transaction_date or datetime.utcnow(),
         created_by=current_user.id
     )
     
@@ -286,6 +290,7 @@ def create_confirming_settlement(
         status="completed",
         from_balance_after=charge_account.balance,
         to_balance_after=confirming_account.balance,
+        transaction_date=settlement_data.transaction_date or datetime.utcnow(),
         created_by=current_user.id
     )
     

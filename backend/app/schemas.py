@@ -250,6 +250,7 @@ class OperationFlowMap(BaseModel):
 class TransactionBase(BaseModel):
     amount: Decimal = Field(..., gt=0)
     description: Optional[str] = None
+    transaction_date: Optional[datetime] = None  # Fecha del movimiento (opcional, default hoy)
 
 
 class TransferCreate(TransactionBase):
@@ -272,6 +273,7 @@ class ConfirmingSettlementCreate(BaseModel):
     charge_account_id: UUID      # Cuenta corriente de donde se cobra
     amount: Decimal = Field(..., gt=0)
     description: Optional[str] = None
+    transaction_date: Optional[datetime] = None
 
 
 class TransactionResponse(TransactionBase):
@@ -283,6 +285,7 @@ class TransactionResponse(TransactionBase):
     operation_id: Optional[UUID] = None
     from_balance_after: Optional[Decimal] = None
     to_balance_after: Optional[Decimal] = None
+    transaction_date: Optional[datetime] = None
     created_by: Optional[UUID]
     created_at: datetime
     

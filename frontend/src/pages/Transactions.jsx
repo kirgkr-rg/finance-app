@@ -31,7 +31,8 @@ const Transactions = () => {
     confirming_account_id: '',
     charge_account_id: '',
     amount: '',
-    description: ''
+    description: '',
+    transaction_date: new Date().toISOString().split('T')[0]
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -75,7 +76,8 @@ const Transactions = () => {
     try {
       const payload = {
         amount: parseFloat(formData.amount),
-        description: formData.description
+        description: formData.description,
+        transaction_date: formData.transaction_date ? new Date(formData.transaction_date).toISOString() : null
       };
 
       if (transactionType === 'transfer') {
@@ -95,7 +97,15 @@ const Transactions = () => {
       }
 
       setShowModal(false);
-      setFormData({ from_account_id: '', to_account_id: '', confirming_account_id: '', charge_account_id: '', amount: '', description: '' });
+      setFormData({ 
+        from_account_id: '', 
+        to_account_id: '', 
+        confirming_account_id: '', 
+        charge_account_id: '', 
+        amount: '', 
+        description: '',
+        transaction_date: new Date().toISOString().split('T')[0]
+      });
       fetchData();
     } catch (err) {
       const detail = err.response?.data?.detail;
@@ -156,7 +166,15 @@ const Transactions = () => {
 
   const openModal = (type) => {
     setTransactionType(type);
-    setFormData({ from_account_id: '', to_account_id: '', confirming_account_id: '', charge_account_id: '', amount: '', description: '' });
+    setFormData({ 
+      from_account_id: '', 
+      to_account_id: '', 
+      confirming_account_id: '', 
+      charge_account_id: '', 
+      amount: '', 
+      description: '',
+      transaction_date: new Date().toISOString().split('T')[0]
+    });
     setError('');
     setShowModal(true);
   };
@@ -395,7 +413,7 @@ const Transactions = () => {
                         {formatCurrency(tx.amount)}
                       </span>
                     </td>
-                    <td className="date-cell">{formatDate(tx.created_at)}</td>
+                    <td className="date-cell">{formatDate(tx.transaction_date || tx.created_at)}</td>
                     {isSupervisor() && (
                       <td>
                         <div className="table-actions">
@@ -536,6 +554,17 @@ const Transactions = () => {
                   placeholder="0.00"
                   min="0.01"
                   step="0.01"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="transaction_date">Fecha del movimiento</label>
+                <input
+                  type="date"
+                  id="transaction_date"
+                  value={formData.transaction_date}
+                  onChange={(e) => setFormData({ ...formData, transaction_date: e.target.value })}
                   required
                 />
               </div>

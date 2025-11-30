@@ -32,7 +32,8 @@ const Operations = () => {
     to_account_id: '',
     amount: '',
     description: '',
-    operation_id: ''
+    operation_id: '',
+    transaction_date: new Date().toISOString().split('T')[0]
   });
   const [error, setError] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -116,7 +117,8 @@ const Operations = () => {
     try {
       await api.post('/transactions/transfer', {
         ...transferData,
-        amount: parseFloat(transferData.amount)
+        amount: parseFloat(transferData.amount),
+        transaction_date: transferData.transaction_date ? new Date(transferData.transaction_date).toISOString() : null
       });
       setShowTransferModal(false);
       setTransferData({
@@ -124,7 +126,8 @@ const Operations = () => {
         to_account_id: '',
         amount: '',
         description: '',
-        operation_id: ''
+        operation_id: '',
+        transaction_date: new Date().toISOString().split('T')[0]
       });
       if (selectedOperation) {
         viewFlow(selectedOperation.id);
@@ -161,8 +164,12 @@ const Operations = () => {
   const openTransferModal = (operation) => {
     setSelectedOperation(operation);
     setTransferData({
-      ...transferData,
-      operation_id: operation.id
+      from_account_id: '',
+      to_account_id: '',
+      amount: '',
+      description: '',
+      operation_id: operation.id,
+      transaction_date: new Date().toISOString().split('T')[0]
     });
     setShowTransferModal(true);
   };
@@ -793,6 +800,17 @@ const Operations = () => {
                   placeholder="0.00"
                   min="0.01"
                   step="0.01"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="transaction_date">Fecha del movimiento</label>
+                <input
+                  type="date"
+                  id="transaction_date"
+                  value={transferData.transaction_date}
+                  onChange={(e) => setTransferData({ ...transferData, transaction_date: e.target.value })}
                   required
                 />
               </div>
