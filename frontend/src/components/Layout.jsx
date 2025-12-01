@@ -9,6 +9,7 @@ import {
   Users,
   Shield,
   GitBranch,
+  FileText,
   LogOut,
   Menu,
   X,
@@ -83,6 +84,7 @@ const Layout = ({ children }) => {
     { path: '/accounts', icon: Wallet, label: 'Cuentas' },
     { path: '/transactions', icon: ArrowLeftRight, label: 'Transacciones' },
     { path: '/operations', icon: GitBranch, label: 'Operaciones' },
+    { path: '/pending-entries', icon: FileText, label: 'Apuntes Pendientes' },
   ];
 
   if (isSupervisor()) {

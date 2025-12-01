@@ -887,6 +887,91 @@ body {
   color: var(--danger);
 }
 
+/* Pending Entries */
+.pending-summary {
+  margin-bottom: 1.5rem;
+}
+
+.groups-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.group-balance-card {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.group-balance-card h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.balance-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.balance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.balance-row .label {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.balance-row .amount {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.balance-row .amount.positive {
+  color: var(--success);
+}
+
+.balance-row .amount.negative {
+  color: var(--danger);
+}
+
+.balance-row.net {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.settled-row {
+  opacity: 0.6;
+}
+
+.status-badge.pending {
+  background: var(--warning);
+  color: #000;
+}
+
+.status-badge.settled {
+  background: var(--success);
+  color: #fff;
+}
+
+.btn.success, .btn-success {
+  background: var(--success);
+  color: #fff;
+}
+
+.btn.success:hover, .btn-success:hover {
+  background: #16a34a;
+}
+
 .expand-controls {
   display: flex;
   gap: 0.5rem;

@@ -324,5 +324,41 @@ class DashboardData(BaseModel):
     recent_transactions: List[TransactionWithAccounts]
 
 
+# ============ PENDING ENTRY SCHEMAS ============
+
+class PendingEntryCreate(BaseModel):
+    from_group_id: UUID
+    to_group_id: UUID
+    amount: Decimal = Field(..., gt=0)
+    description: Optional[str] = None
+    operation_id: Optional[UUID] = None
+
+
+class PendingEntryResponse(BaseModel):
+    id: UUID
+    from_group_id: UUID
+    from_group_name: Optional[str] = None
+    to_group_id: UUID
+    to_group_name: Optional[str] = None
+    amount: Decimal
+    description: Optional[str]
+    operation_id: Optional[UUID]
+    settled_in_operation_id: Optional[UUID]
+    status: str
+    created_at: datetime
+    settled_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class GroupBalanceSummary(BaseModel):
+    group_id: UUID
+    group_name: str
+    owes: Decimal  # Lo que debe
+    owed: Decimal  # Lo que le deben
+    net: Decimal   # Saldo neto
+
+
 # Actualizar referencias circulares
 CompanyWithAccounts.model_rebuild()

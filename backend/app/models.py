@@ -24,7 +24,7 @@ class User(Base):
     created_companies = relationship("Company", back_populates="creator")
     
     __table_args__ = (
-        CheckConstraint("role IN ('supervisor', 'user')", name="valid_role"),
+        CheckConstraint("role IN ('supervisor', 'user', 'demo')", name="valid_role"),
     )
 
 
@@ -186,3 +186,32 @@ class Attachment(Base):
     # Relaciones
     transaction = relationship("Transaction", back_populates="attachments")
     uploader = relationship("User")
+
+
+class PendingEntry(Base):
+    """Apuntes pendientes entre grupos (deudas/créditos no bancarios)."""
+    __tablename__ = "pending_entries"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    from_group_id = Column(UUID(as_uuid=True), ForeignKey("groups.id"), nullable=False)  # Grupo deudor
+    to_group_id = Column(UUID(as_uuid=True), ForeignKey("groups.id"), nullable=False)    # Grupo acreedor
+    amount = Column(Numeric(15, 2), nullable=False)
+    description = Column(String(500))
+    operation_id = Column(UUID(as_uuid=True), ForeignKey("operations.id"), nullable=True)  # Operación donde se creó
+    settled_in_operation_id = Column(UUID(as_uuid=True), ForeignKey("operations.id"), nullable=True)  # Operación donde se liquidó
+    status = Column(String(20), default="pending")  # pending, settled
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at = Column(DateTime, server_default=func.now())
+    settled_at = Column(DateTime, nullable=True)
+    
+    # Relaciones
+    from_group = relationship("Group", foreign_keys=[from_group_id])
+    to_group = relationship("Group", foreign_keys=[to_group_id])
+    operation = relationship("Operation", foreign_keys=[operation_id])
+    settled_in_operation = relationship("Operation", foreign_keys=[settled_in_operation_id])
+    creator = relationship("User")
+    
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="positive_pending_amount"),
+        CheckConstraint("status IN ('pending', 'settled')", name="valid_pending_status"),
+    )

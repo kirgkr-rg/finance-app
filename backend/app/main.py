@@ -14,7 +14,8 @@ from app.routers import (
     permissions_router,
     transactions_router,
     operations_router,
-    attachments_router
+    attachments_router,
+    pending_entries_router
 )
 
 settings = get_settings()
@@ -56,6 +57,7 @@ app.include_router(permissions_router)
 app.include_router(transactions_router)
 app.include_router(operations_router)
 app.include_router(attachments_router)
+app.include_router(pending_entries_router)
 
 
 @app.get("/")

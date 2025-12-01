@@ -12,6 +12,7 @@ import Transactions from './pages/Transactions';
 import UsersPage from './pages/Users';
 import Permissions from './pages/Permissions';
 import Operations from './pages/Operations';
+import PendingEntries from './pages/PendingEntries';
 import './index.css';
 
 const PrivateRoute = ({ children, requireSupervisor = false }) => {
@@ -136,6 +137,14 @@ function App() {
             element={
               <PrivateRoute>
                 <Operations />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/pending-entries"
+            element={
+              <PrivateRoute>
+                <PendingEntries />
               </PrivateRoute>
             }
           />
