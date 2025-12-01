@@ -82,11 +82,11 @@ const Layout = ({ children }) => {
     { path: '/companies', icon: Building2, label: 'Empresas' },
     { path: '/accounts', icon: Wallet, label: 'Cuentas' },
     { path: '/transactions', icon: ArrowLeftRight, label: 'Transacciones' },
+    { path: '/operations', icon: GitBranch, label: 'Operaciones' },
   ];
 
   if (isSupervisor()) {
     navItems.push(
-      { path: '/operations', icon: GitBranch, label: 'Operaciones' },
       { path: '/users', icon: Users, label: 'Usuarios' },
       { path: '/permissions', icon: Shield, label: 'Permisos' }
     );
