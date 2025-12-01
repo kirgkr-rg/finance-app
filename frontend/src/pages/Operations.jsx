@@ -225,7 +225,7 @@ const Operations = () => {
   const exportToPDF = () => {
     if (!flowData) return;
 
-    const { operation, edges, nodes, group_nodes } = flowData;
+    const { operation, edges, nodes, group_nodes, pending_edges } = flowData;
     
     // Crear contenido HTML para el PDF
     const htmlContent = `
@@ -246,17 +246,22 @@ const Operations = () => {
           .meta-item .value { font-size: 16px; font-weight: bold; }
           .section { margin-bottom: 30px; }
           .section h2 { font-size: 16px; color: #6366f1; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 15px; }
+          .section.pending h2 { color: #d97706; border-color: #d97706; }
           table { width: 100%; border-collapse: collapse; font-size: 13px; }
           th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
           th { background: #f8f9fa; font-weight: 600; color: #666; }
           .text-right { text-align: right; }
           .positive { color: #22c55e; }
           .negative { color: #ef4444; }
+          .pending-color { color: #d97706; }
           .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
           .summary-card { background: #f8f9fa; border-radius: 8px; padding: 15px; }
           .summary-card h3 { font-size: 14px; margin-bottom: 10px; }
           .summary-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
           .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 11px; color: #666; text-align: center; }
+          .status-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+          .status-badge.pending { background: #fef3c7; color: #92400e; }
+          .status-badge.settled { background: #d1fae5; color: #065f46; }
         </style>
       </head>
       <body>
@@ -284,6 +289,12 @@ const Operations = () => {
             <div class="label">Nº Transferencias</div>
             <div class="value">${edges.length}</div>
           </div>
+          ${pending_edges && pending_edges.length > 0 ? `
+          <div class="meta-item">
+            <div class="label">Nº Apuntes</div>
+            <div class="value">${pending_edges.length}</div>
+          </div>
+          ` : ''}
         </div>
 
         ${operation.notes ? `
@@ -317,7 +328,37 @@ const Operations = () => {
             </tbody>
           </table>
         </div>
+        ` : ''}
 
+        ${pending_edges && pending_edges.length > 0 ? `
+        <div class="section pending">
+          <h2>Apuntes Pendientes (no bancarios)</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Deudor</th>
+                <th>Acreedor</th>
+                <th class="text-right">Importe</th>
+                <th>Descripción</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${pending_edges.map(edge => `
+                <tr>
+                  <td>${edge.from_group_name}</td>
+                  <td>${edge.to_group_name}</td>
+                  <td class="text-right pending-color">${formatCurrency(edge.amount)}</td>
+                  <td>${edge.description || '-'}</td>
+                  <td><span class="status-badge ${edge.status}">${edge.status === 'pending' ? 'Pendiente' : 'Liquidado'}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        ` : ''}
+
+        ${nodes.length > 0 ? `
         <div class="section">
           <h2>Resumen por Empresa</h2>
           <table>
@@ -343,6 +384,7 @@ const Operations = () => {
             </tbody>
           </table>
         </div>
+        ` : ''}
 
         ${group_nodes && group_nodes.length > 0 ? `
         <div class="section">
@@ -351,27 +393,34 @@ const Operations = () => {
             <thead>
               <tr>
                 <th>Grupo</th>
-                <th class="text-right">Entradas</th>
-                <th class="text-right">Salidas</th>
-                <th class="text-right">Neto</th>
+                <th class="text-right">Transferencias</th>
+                <th class="text-right">Apuntes</th>
+                <th class="text-right">Neto Total</th>
               </tr>
             </thead>
             <tbody>
-              ${group_nodes.map(node => `
+              ${group_nodes.map(node => {
+                const netTransfers = parseFloat(node.total_in) - parseFloat(node.total_out);
+                const netPending = parseFloat(node.pending_in || 0) - parseFloat(node.pending_out || 0);
+                const netTotal = netTransfers + netPending;
+                return `
                 <tr>
                   <td>${node.group_name}</td>
-                  <td class="text-right positive">+${formatCurrency(node.total_in)}</td>
-                  <td class="text-right negative">-${formatCurrency(node.total_out)}</td>
-                  <td class="text-right ${node.total_in - node.total_out >= 0 ? 'positive' : 'negative'}">
-                    ${formatCurrency(node.total_in - node.total_out)}
+                  <td class="text-right ${netTransfers >= 0 ? 'positive' : 'negative'}">
+                    ${formatCurrency(netTransfers)}
+                  </td>
+                  <td class="text-right ${netPending >= 0 ? 'positive' : 'negative'}">
+                    ${netPending !== 0 ? formatCurrency(netPending) : '-'}
+                  </td>
+                  <td class="text-right ${netTotal >= 0 ? 'positive' : 'negative'}">
+                    ${formatCurrency(netTotal)}
                   </td>
                 </tr>
-              `).join('')}
+              `}).join('')}
             </tbody>
           </table>
         </div>
         ` : ''}
-        ` : '<p>Esta operación no tiene transferencias.</p>'}
 
         <div class="footer">
           Generado el ${new Date().toLocaleString('es-ES')} • Finance App
