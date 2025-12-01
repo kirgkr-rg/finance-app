@@ -643,70 +643,75 @@ const Operations = () => {
               </div>
             </div>
             <div className="flow-content">
-              {flowData.edges.length === 0 ? (
+              {flowData.edges.length === 0 && (!flowData.pending_edges || flowData.pending_edges.length === 0) ? (
                 <div className="empty-state">
                   <GitBranch size={48} />
                   <h3>Sin movimientos</h3>
-                  <p>Esta operación aún no tiene transferencias</p>
+                  <p>Esta operación aún no tiene transferencias ni apuntes</p>
                 </div>
               ) : (
                 <>
-                  {/* Mapa visual del flujo */}
-                  <div className="flow-map">
-                    <h3>Mapa de Transferencias</h3>
-                    <div className="flow-diagram">
-                      {flowData.edges.map((edge, index) => (
-                        <div key={index} className="flow-edge">
-                          <div className="flow-node from">
-                            <span className="node-name">{edge.from_company_name}</span>
+                  {/* Mapa visual del flujo - Transferencias */}
+                  {flowData.edges.length > 0 && (
+                    <div className="flow-map">
+                      <h3>Transferencias Bancarias</h3>
+                      <div className="flow-diagram">
+                        {flowData.edges.map((edge, index) => (
+                          <div key={index} className="flow-edge">
+                            <div className="flow-node from">
+                              <span className="node-name">{edge.from_company_name}</span>
+                            </div>
+                            <div className="flow-arrow">
+                              <ArrowRight size={24} />
+                              <span className="flow-amount">{formatCurrency(edge.amount)}</span>
+                            </div>
+                            <div className="flow-node to">
+                              <span className="node-name">{edge.to_company_name}</span>
+                            </div>
+                            <span className="flow-date">{formatDate(edge.created_at)}</span>
                           </div>
-                          <div className="flow-arrow">
-                            <ArrowRight size={24} />
-                            <span className="flow-amount">{formatCurrency(edge.amount)}</span>
-                          </div>
-                          <div className="flow-node to">
-                            <span className="node-name">{edge.to_company_name}</span>
-                          </div>
-                          <span className="flow-date">{formatDate(edge.created_at)}</span>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Mapa visual - Apuntes pendientes */}
+                  {flowData.pending_edges && flowData.pending_edges.length > 0 && (
+                    <div className="flow-map pending-map">
+                      <h3>Apuntes Pendientes (no bancarios)</h3>
+                      <div className="flow-diagram">
+                        {flowData.pending_edges.map((edge, index) => (
+                          <div key={index} className={`flow-edge pending-edge ${edge.status}`}>
+                            <div className="flow-node from">
+                              <span className="node-name">{edge.from_group_name}</span>
+                            </div>
+                            <div className="flow-arrow pending">
+                              <ArrowRight size={24} />
+                              <span className="flow-amount">{formatCurrency(edge.amount)}</span>
+                            </div>
+                            <div className="flow-node to">
+                              <span className="node-name">{edge.to_group_name}</span>
+                            </div>
+                            <div className="flow-edge-meta">
+                              <span className={`status-badge ${edge.status}`}>
+                                {edge.status === 'pending' ? 'Pendiente' : 'Liquidado'}
+                              </span>
+                              {edge.description && <span className="flow-description">{edge.description}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Resumen por empresa */}
-                  <div className="flow-summary">
-                    <h3>Resumen por Empresa</h3>
-                    <div className="summary-grid">
-                      {flowData.nodes.map((node) => (
-                        <div key={node.company_id} className="summary-card">
-                          <h4>{node.company_name}</h4>
-                          <div className="summary-row">
-                            <span className="label">Entradas:</span>
-                            <span className="value positive">+{formatCurrency(node.total_in)}</span>
-                          </div>
-                          <div className="summary-row">
-                            <span className="label">Salidas:</span>
-                            <span className="value negative">-{formatCurrency(node.total_out)}</span>
-                          </div>
-                          <div className="summary-row total">
-                            <span className="label">Neto:</span>
-                            <span className={`value ${node.total_in - node.total_out >= 0 ? 'positive' : 'negative'}`}>
-                              {formatCurrency(node.total_in - node.total_out)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Resumen por grupo */}
-                  {flowData.group_nodes && flowData.group_nodes.length > 0 && (
-                    <div className="flow-summary group-summary">
-                      <h3><FolderTree size={20} /> Resumen por Grupo</h3>
+                  {flowData.nodes.length > 0 && (
+                    <div className="flow-summary">
+                      <h3>Resumen por Empresa</h3>
                       <div className="summary-grid">
-                        {flowData.group_nodes.map((node, index) => (
-                          <div key={node.group_id || `no-group-${index}`} className="summary-card group-card-summary">
-                            <h4>{node.group_name}</h4>
+                        {flowData.nodes.map((node) => (
+                          <div key={node.company_id} className="summary-card">
+                            <h4>{node.company_name}</h4>
                             <div className="summary-row">
                               <span className="label">Entradas:</span>
                               <span className="value positive">+{formatCurrency(node.total_in)}</span>
@@ -726,10 +731,49 @@ const Operations = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Resumen por grupo */}
+                  {flowData.group_nodes && flowData.group_nodes.length > 0 && (
+                    <div className="flow-summary group-summary">
+                      <h3><FolderTree size={20} /> Resumen por Grupo</h3>
+                      <div className="summary-grid">
+                        {flowData.group_nodes.map((node, index) => {
+                          const netTransfers = parseFloat(node.total_in) - parseFloat(node.total_out);
+                          const netPending = parseFloat(node.pending_in || 0) - parseFloat(node.pending_out || 0);
+                          const netTotal = netTransfers + netPending;
+                          return (
+                            <div key={node.group_id || `no-group-${index}`} className="summary-card group-card-summary">
+                              <h4>{node.group_name}</h4>
+                              <div className="summary-row">
+                                <span className="label">Transferencias:</span>
+                                <span className={`value ${netTransfers >= 0 ? 'positive' : 'negative'}`}>
+                                  {formatCurrency(netTransfers)}
+                                </span>
+                              </div>
+                              {(node.pending_in > 0 || node.pending_out > 0) && (
+                                <div className="summary-row pending-row">
+                                  <span className="label">Apuntes:</span>
+                                  <span className={`value ${netPending >= 0 ? 'positive' : 'negative'}`}>
+                                    {formatCurrency(netPending)}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="summary-row total">
+                                <span className="label">Neto Total:</span>
+                                <span className={`value ${netTotal >= 0 ? 'positive' : 'negative'}`}>
+                                  {formatCurrency(netTotal)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
-              {flowData.operation.status === 'open' && (
+              {flowData.operation.status === 'open' && isSupervisor() && (
                 <div className="flow-actions">
                   <button className="btn btn-primary" onClick={() => {
                     setShowFlowModal(false);

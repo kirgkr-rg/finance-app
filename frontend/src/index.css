@@ -972,6 +972,62 @@ body {
   background: #16a34a;
 }
 
+/* Pending entries in flow */
+.pending-map {
+  background: #fef3c7;
+  border: 2px dashed #f59e0b;
+}
+
+.pending-map h3 {
+  color: #92400e;
+}
+
+.flow-edge.pending-edge {
+  border-style: dashed;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.flow-arrow.pending {
+  border-style: dashed;
+}
+
+.flow-arrow.pending svg {
+  color: #f59e0b;
+}
+
+.flow-edge.pending-edge.settled {
+  opacity: 0.6;
+}
+
+.flow-edge-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.flow-description {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.summary-row.pending-row {
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.summary-row.pending-row .label::before {
+  content: "📝 ";
+}
+
+.group-balance-breakdown {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
 .expand-controls {
   display: flex;
   gap: 0.5rem;

@@ -196,6 +196,12 @@ const Dashboard = () => {
                 >
                   <div className="group-balance-info">
                     <span className="group-balance-name">{group.group_name}</span>
+                    {group.pending_balance !== 0 && (
+                      <span className="group-balance-breakdown">
+                        Bancario: {formatCurrency(group.transfers_balance)} | 
+                        Apuntes: {formatCurrency(group.pending_balance)}
+                      </span>
+                    )}
                   </div>
                   <span className={`group-balance-amount ${group.balance >= 0 ? 'positive' : 'negative'}`}>
                     {group.balance >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
@@ -207,7 +213,7 @@ const Dashboard = () => {
           </div>
           {groupsBalance.length > 0 && (
             <p className="balance-explanation">
-              Balance positivo = el grupo ha recibido más de lo que ha enviado
+              Balance positivo = el grupo ha recibido más de lo que ha enviado (incluye apuntes pendientes)
             </p>
           )}
         </section>

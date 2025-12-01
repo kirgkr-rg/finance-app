@@ -233,11 +233,26 @@ class OperationFlowEdge(BaseModel):
     created_at: datetime
 
 
+class PendingEntryEdge(BaseModel):
+    """Apunte pendiente en el flujo de operación."""
+    from_group_id: UUID
+    from_group_name: str
+    to_group_id: UUID
+    to_group_name: str
+    amount: Decimal
+    description: Optional[str]
+    entry_id: UUID
+    status: str
+    created_at: datetime
+
+
 class OperationGroupNode(BaseModel):
     group_id: Optional[UUID]
     group_name: str
     total_in: Decimal
     total_out: Decimal
+    pending_in: Decimal = Decimal("0")  # Apuntes pendientes entrantes
+    pending_out: Decimal = Decimal("0")  # Apuntes pendientes salientes
 
 
 class OperationFlowMap(BaseModel):
@@ -245,6 +260,7 @@ class OperationFlowMap(BaseModel):
     nodes: List[OperationFlowNode]
     edges: List[OperationFlowEdge]
     group_nodes: List[OperationGroupNode] = []
+    pending_edges: List[PendingEntryEdge] = []  # Apuntes pendientes
 
 
 # ============ TRANSACTION SCHEMAS ============

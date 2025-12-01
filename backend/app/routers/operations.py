@@ -134,7 +134,8 @@ def get_operation_flow(
     db: Session = Depends(get_db)
 ):
     """Obtener el mapa de flujo de una operación."""
-    from app.models import Company
+    from app.models import Company, PendingEntry, Group
+    from app.schemas import PendingEntryEdge
     
     # Verificar acceso para usuarios normales
     if current_user.role != "supervisor":
@@ -198,20 +199,66 @@ def get_operation_flow(
         for company_id, data in company_flows.items()
     ]
     
-    # Calcular resumen por grupos
-    group_flows = defaultdict(lambda: {"in": Decimal("0"), "out": Decimal("0"), "name": ""})
+    # Obtener apuntes pendientes de esta operación
+    pending_entries = db.query(PendingEntry).filter(
+        or_(
+            PendingEntry.operation_id == operation_id,
+            PendingEntry.settled_in_operation_id == operation_id
+        )
+    ).all()
+    
+    pending_edges = []
+    pending_by_group = defaultdict(lambda: {"in": Decimal("0"), "out": Decimal("0")})
+    
+    for entry in pending_entries:
+        from_group = db.query(Group).filter(Group.id == entry.from_group_id).first()
+        to_group = db.query(Group).filter(Group.id == entry.to_group_id).first()
+        
+        pending_edges.append(PendingEntryEdge(
+            from_group_id=entry.from_group_id,
+            from_group_name=from_group.name if from_group else "Desconocido",
+            to_group_id=entry.to_group_id,
+            to_group_name=to_group.name if to_group else "Desconocido",
+            amount=entry.amount,
+            description=entry.description,
+            entry_id=entry.id,
+            status=entry.status,
+            created_at=entry.created_at
+        ))
+        
+        # Acumular por grupo para el resumen
+        pending_by_group[str(entry.from_group_id)]["out"] += entry.amount
+        pending_by_group[str(entry.to_group_id)]["in"] += entry.amount
+    
+    # Calcular resumen por grupos (transacciones + apuntes)
+    group_flows = defaultdict(lambda: {"in": Decimal("0"), "out": Decimal("0"), "name": "", "pending_in": Decimal("0"), "pending_out": Decimal("0")})
+    
     for company_id, data in company_flows.items():
-        group_key = data["group_id"] or "sin_grupo"
+        group_key = str(data["group_id"]) if data["group_id"] else "sin_grupo"
         group_flows[group_key]["in"] += data["in"]
         group_flows[group_key]["out"] += data["out"]
         group_flows[group_key]["name"] = data["group_name"]
     
+    # Añadir apuntes pendientes al resumen de grupos
+    for group_id, pending_data in pending_by_group.items():
+        if group_id in group_flows:
+            group_flows[group_id]["pending_in"] = pending_data["in"]
+            group_flows[group_id]["pending_out"] = pending_data["out"]
+        else:
+            # El grupo solo tiene apuntes, no transacciones
+            group = db.query(Group).filter(Group.id == group_id).first()
+            group_flows[group_id]["name"] = group.name if group else "Desconocido"
+            group_flows[group_id]["pending_in"] = pending_data["in"]
+            group_flows[group_id]["pending_out"] = pending_data["out"]
+    
     group_nodes = [
         OperationGroupNode(
-            group_id=group_id if group_id != "sin_grupo" else None,
+            group_id=UUID(group_id) if group_id != "sin_grupo" else None,
             group_name=data["name"],
             total_in=data["in"],
-            total_out=data["out"]
+            total_out=data["out"],
+            pending_in=data["pending_in"],
+            pending_out=data["pending_out"]
         )
         for group_id, data in group_flows.items()
     ]
@@ -220,7 +267,8 @@ def get_operation_flow(
         operation=operation,
         nodes=nodes,
         edges=edges,
-        group_nodes=group_nodes
+        group_nodes=group_nodes,
+        pending_edges=pending_edges
     )
 
 
@@ -295,8 +343,8 @@ def get_groups_balance(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Obtener el balance neto entre grupos de todas las operaciones."""
-    from app.models import Company, Group
+    """Obtener el balance neto entre grupos de todas las operaciones (transacciones + apuntes)."""
+    from app.models import Company, Group, PendingEntry
     
     # Obtener todas las transacciones de tipo transfer que tienen operación
     query = db.query(Transaction).filter(
@@ -322,9 +370,9 @@ def get_groups_balance(
     
     transactions = query.all()
     
-    # Calcular balance entre grupos
+    # Calcular balance entre grupos por transacciones
     # Positivo = el grupo ha recibido más de lo que ha enviado
-    group_balances = defaultdict(lambda: Decimal("0"))
+    group_balances = defaultdict(lambda: {"transfers": Decimal("0"), "pending": Decimal("0")})
     group_names = {}
     
     for tx in transactions:
@@ -338,25 +386,43 @@ def get_groups_balance(
         if from_group_id != to_group_id:
             # El grupo origen pierde, el destino gana
             if from_group_id:
-                group_balances[str(from_group_id)] -= tx.amount
+                group_balances[str(from_group_id)]["transfers"] -= tx.amount
                 if from_company.group:
                     group_names[str(from_group_id)] = from_company.group.name
             
             if to_group_id:
-                group_balances[str(to_group_id)] += tx.amount
+                group_balances[str(to_group_id)]["transfers"] += tx.amount
                 if to_company.group:
                     group_names[str(to_group_id)] = to_company.group.name
     
-    # Convertir a lista
-    result = [
-        {
-            "group_id": group_id,
-            "group_name": group_names.get(group_id, "Sin grupo"),
-            "balance": float(balance)
-        }
-        for group_id, balance in group_balances.items()
-        if balance != 0  # Solo mostrar grupos con balance != 0
-    ]
+    # Añadir apuntes pendientes (solo los pendientes)
+    pending_entries = db.query(PendingEntry).filter(PendingEntry.status == "pending").all()
+    
+    for entry in pending_entries:
+        from_group = db.query(Group).filter(Group.id == entry.from_group_id).first()
+        to_group = db.query(Group).filter(Group.id == entry.to_group_id).first()
+        
+        # El grupo deudor tiene balance negativo, el acreedor positivo
+        group_balances[str(entry.from_group_id)]["pending"] -= entry.amount
+        group_balances[str(entry.to_group_id)]["pending"] += entry.amount
+        
+        if from_group:
+            group_names[str(entry.from_group_id)] = from_group.name
+        if to_group:
+            group_names[str(entry.to_group_id)] = to_group.name
+    
+    # Convertir a lista con balance total
+    result = []
+    for group_id, balances in group_balances.items():
+        total = balances["transfers"] + balances["pending"]
+        if total != 0 or balances["pending"] != 0:  # Mostrar si hay balance o apuntes pendientes
+            result.append({
+                "group_id": group_id,
+                "group_name": group_names.get(group_id, "Sin grupo"),
+                "balance": float(total),
+                "transfers_balance": float(balances["transfers"]),
+                "pending_balance": float(balances["pending"])
+            })
     
     # Ordenar por balance descendente
     result.sort(key=lambda x: x["balance"], reverse=True)
