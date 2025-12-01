@@ -134,7 +134,7 @@ function App() {
           <Route
             path="/operations"
             element={
-              <PrivateRoute requireSupervisor>
+              <PrivateRoute>
                 <Operations />
               </PrivateRoute>
             }
