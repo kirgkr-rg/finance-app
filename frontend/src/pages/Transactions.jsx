@@ -20,9 +20,10 @@ import {
 } from 'lucide-react';
 
 const Transactions = () => {
-  const { isSupervisor } = useAuth();
+  const { isSupervisor, isDemo, canEdit } = useAuth();
   const [transactions, setTransactions] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [transactionType, setTransactionType] = useState('transfer');
@@ -35,6 +36,8 @@ const Transactions = () => {
     description: '',
     transaction_date: new Date().toISOString().split('T')[0]
   });
+  const [fromCompanyFilter, setFromCompanyFilter] = useState('');
+  const [toCompanyFilter, setToCompanyFilter] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   
@@ -66,12 +69,14 @@ const Transactions = () => {
 
   const fetchData = async () => {
     try {
-      const [transactionsRes, accountsRes] = await Promise.all([
+      const [transactionsRes, accountsRes, companiesRes] = await Promise.all([
         api.get('/transactions/?limit=100'),
-        api.get('/accounts/')
+        api.get('/accounts/'),
+        api.get('/companies/')
       ]);
       setTransactions(transactionsRes.data);
       setAccounts(accountsRes.data);
+      setCompanies(companiesRes.data);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -117,6 +122,8 @@ const Transactions = () => {
         description: '',
         transaction_date: new Date().toISOString().split('T')[0]
       });
+      setFromCompanyFilter('');
+      setToCompanyFilter('');
       fetchData();
     } catch (err) {
       const detail = err.response?.data?.detail;
@@ -137,6 +144,13 @@ const Transactions = () => {
       style: 'currency',
       currency: currency,
     }).format(amount);
+  };
+
+  const displayAmount = (amount, currency = 'EUR') => {
+    if (isDemo()) {
+      return '****';
+    }
+    return formatCurrency(amount, currency);
   };
 
   const formatDate = (dateString) => {
@@ -186,6 +200,8 @@ const Transactions = () => {
       description: '',
       transaction_date: new Date().toISOString().split('T')[0]
     });
+    setFromCompanyFilter('');
+    setToCompanyFilter('');
     setError('');
     setShowModal(true);
   };
@@ -413,7 +429,7 @@ const Transactions = () => {
             <ArrowLeftRight size={18} />
             Transferir
           </button>
-          {isSupervisor() && (
+          {canEdit() && (
             <>
               <button className="btn btn-success" onClick={() => openModal('deposit')}>
                 <ArrowDownLeft size={18} />
@@ -452,7 +468,7 @@ const Transactions = () => {
                   <th>Destino</th>
                   <th className="text-right">Monto</th>
                   <th>Fecha</th>
-                  {isSupervisor() && <th></th>}
+                  {canEdit() && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -486,11 +502,11 @@ const Transactions = () => {
                         tx.transaction_type === 'deposit' ? 'positive' : 
                         tx.transaction_type === 'withdrawal' ? 'negative' : ''
                       }`}>
-                        {formatCurrency(tx.amount)}
+                        {displayAmount(tx.amount)}
                       </span>
                     </td>
                     <td className="date-cell">{formatDate(tx.transaction_date || tx.created_at)}</td>
-                    {isSupervisor() && (
+                    {canEdit() && (
                       <td>
                         <div className="table-actions">
                           <button 
@@ -586,42 +602,87 @@ const Transactions = () => {
               )}
 
               {(transactionType === 'transfer' || transactionType === 'withdrawal') && (
-                <div className="form-group">
-                  <label htmlFor="from_account_id">Cuenta Origen</label>
-                  <select
-                    id="from_account_id"
-                    value={formData.from_account_id}
-                    onChange={(e) => setFormData({ ...formData, from_account_id: e.target.value })}
-                    required
-                  >
-                    <option value="">Seleccionar cuenta</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.company?.name} - {account.name} ({formatCurrency(account.balance, account.currency)})
-                      </option>
-                    ))}
-                  </select>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="from_company_filter">Empresa Origen</label>
+                    <select
+                      id="from_company_filter"
+                      value={fromCompanyFilter}
+                      onChange={(e) => {
+                        setFromCompanyFilter(e.target.value);
+                        setFormData({ ...formData, from_account_id: '' });
+                      }}
+                    >
+                      <option value="">Todas las empresas</option>
+                      {companies.map((company) => (
+                        <option key={company.id} value={company.id}>
+                          {company.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="from_account_id">Cuenta Origen</label>
+                    <select
+                      id="from_account_id"
+                      value={formData.from_account_id}
+                      onChange={(e) => setFormData({ ...formData, from_account_id: e.target.value })}
+                      required
+                    >
+                      <option value="">Seleccionar cuenta</option>
+                      {accounts
+                        .filter(a => !fromCompanyFilter || a.company_id === fromCompanyFilter)
+                        .map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {!fromCompanyFilter && `${account.company?.name} - `}{account.name} ({formatCurrency(account.balance, account.currency)})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
               )}
 
               {(transactionType === 'transfer' || transactionType === 'deposit') && (
-                <div className="form-group">
-                  <label htmlFor="to_account_id">Cuenta Destino</label>
-                  <select
-                    id="to_account_id"
-                    value={formData.to_account_id}
-                    onChange={(e) => setFormData({ ...formData, to_account_id: e.target.value })}
-                    required
-                  >
-                    <option value="">Seleccionar cuenta</option>
-                    {accounts
-                      .filter(a => a.id !== formData.from_account_id)
-                      .map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {account.company?.name} - {account.name}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="to_company_filter">Empresa Destino</label>
+                    <select
+                      id="to_company_filter"
+                      value={toCompanyFilter}
+                      onChange={(e) => {
+                        setToCompanyFilter(e.target.value);
+                        setFormData({ ...formData, to_account_id: '' });
+                      }}
+                    >
+                      <option value="">Todas las empresas</option>
+                      {companies.map((company) => (
+                        <option key={company.id} value={company.id}>
+                          {company.name}
                         </option>
                       ))}
-                  </select>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="to_account_id">Cuenta Destino</label>
+                    <select
+                      id="to_account_id"
+                      value={formData.to_account_id}
+                      onChange={(e) => setFormData({ ...formData, to_account_id: e.target.value })}
+                      required
+                    >
+                      <option value="">Seleccionar cuenta</option>
+                      {accounts
+                        .filter(a => a.id !== formData.from_account_id)
+                        .filter(a => !toCompanyFilter || a.company_id === toCompanyFilter)
+                        .map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {!toCompanyFilter && `${account.company?.name} - `}{account.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
               )}
 
