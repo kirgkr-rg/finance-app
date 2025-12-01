@@ -396,8 +396,8 @@ def get_groups_balance(
                 if to_company.group:
                     group_names[str(to_group_id)] = to_company.group.name
     
-    # Añadir apuntes pendientes (solo los pendientes)
-    pending_entries = db.query(PendingEntry).filter(PendingEntry.status == "pending").all()
+    # Añadir TODOS los apuntes (pendientes y liquidados) al balance
+    pending_entries = db.query(PendingEntry).all()
     
     for entry in pending_entries:
         from_group = db.query(Group).filter(Group.id == entry.from_group_id).first()
