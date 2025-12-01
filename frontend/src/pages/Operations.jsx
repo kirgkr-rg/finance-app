@@ -20,6 +20,7 @@ const Operations = () => {
   const { isSupervisor } = useAuth();
   const [operations, setOperations] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showFlowModal, setShowFlowModal] = useState(false);
@@ -37,6 +38,8 @@ const Operations = () => {
     operation_id: '',
     transaction_date: new Date().toISOString().split('T')[0]
   });
+  const [fromCompanyFilter, setFromCompanyFilter] = useState('');
+  const [toCompanyFilter, setToCompanyFilter] = useState('');
   const [error, setError] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
@@ -46,12 +49,14 @@ const Operations = () => {
 
   const fetchData = async () => {
     try {
-      const [operationsRes, accountsRes] = await Promise.all([
+      const [operationsRes, accountsRes, companiesRes] = await Promise.all([
         api.get(`/operations/${filterStatus ? `?status=${filterStatus}` : ''}`),
-        api.get('/accounts/')
+        api.get('/accounts/'),
+        api.get('/companies/')
       ]);
       setOperations(operationsRes.data);
       setAccounts(accountsRes.data);
+      setCompanies(companiesRes.data);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -173,6 +178,8 @@ const Operations = () => {
       operation_id: operation.id,
       transaction_date: new Date().toISOString().split('T')[0]
     });
+    setFromCompanyFilter('');
+    setToCompanyFilter('');
     setShowTransferModal(true);
   };
 
@@ -806,40 +813,85 @@ const Operations = () => {
                 <strong>Operación:</strong> {selectedOperation?.name}
               </div>
 
-              <div className="form-group">
-                <label htmlFor="from_account_id">Cuenta Origen</label>
-                <select
-                  id="from_account_id"
-                  value={transferData.from_account_id}
-                  onChange={(e) => setTransferData({ ...transferData, from_account_id: e.target.value })}
-                  required
-                >
-                  <option value="">Seleccionar cuenta</option>
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.company?.name} - {account.name} ({formatCurrency(account.balance)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="to_account_id">Cuenta Destino</label>
-                <select
-                  id="to_account_id"
-                  value={transferData.to_account_id}
-                  onChange={(e) => setTransferData({ ...transferData, to_account_id: e.target.value })}
-                  required
-                >
-                  <option value="">Seleccionar cuenta</option>
-                  {accounts
-                    .filter(a => a.id !== transferData.from_account_id)
-                    .map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.company?.name} - {account.name}
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="from_company_filter">Empresa Origen</label>
+                  <select
+                    id="from_company_filter"
+                    value={fromCompanyFilter}
+                    onChange={(e) => {
+                      setFromCompanyFilter(e.target.value);
+                      setTransferData({ ...transferData, from_account_id: '' });
+                    }}
+                  >
+                    <option value="">Todas las empresas</option>
+                    {companies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.name}
                       </option>
                     ))}
-                </select>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="from_account_id">Cuenta Origen</label>
+                  <select
+                    id="from_account_id"
+                    value={transferData.from_account_id}
+                    onChange={(e) => setTransferData({ ...transferData, from_account_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Seleccionar cuenta</option>
+                    {accounts
+                      .filter(a => !fromCompanyFilter || a.company_id === fromCompanyFilter)
+                      .map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {!fromCompanyFilter && `${account.company?.name} - `}{account.name} ({formatCurrency(account.balance)})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="to_company_filter">Empresa Destino</label>
+                  <select
+                    id="to_company_filter"
+                    value={toCompanyFilter}
+                    onChange={(e) => {
+                      setToCompanyFilter(e.target.value);
+                      setTransferData({ ...transferData, to_account_id: '' });
+                    }}
+                  >
+                    <option value="">Todas las empresas</option>
+                    {companies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="to_account_id">Cuenta Destino</label>
+                  <select
+                    id="to_account_id"
+                    value={transferData.to_account_id}
+                    onChange={(e) => setTransferData({ ...transferData, to_account_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Seleccionar cuenta</option>
+                    {accounts
+                      .filter(a => a.id !== transferData.from_account_id)
+                      .filter(a => !toCompanyFilter || a.company_id === toCompanyFilter)
+                      .map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {!toCompanyFilter && `${account.company?.name} - `}{account.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
 
               <div className="form-group">
