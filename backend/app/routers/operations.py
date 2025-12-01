@@ -227,8 +227,9 @@ def get_operation_flow(
         ))
         
         # Acumular por grupo para el resumen
-        pending_by_group[str(entry.from_group_id)]["out"] += entry.amount
-        pending_by_group[str(entry.to_group_id)]["in"] += entry.amount
+        # El deudor (from) tiene ese dinero (+), el acreedor (to) le falta (-)
+        pending_by_group[str(entry.from_group_id)]["in"] += entry.amount  # Deudor: tiene el dinero
+        pending_by_group[str(entry.to_group_id)]["out"] += entry.amount   # Acreedor: le falta
     
     # Calcular resumen por grupos (transacciones + apuntes)
     group_flows = defaultdict(lambda: {"in": Decimal("0"), "out": Decimal("0"), "name": "", "pending_in": Decimal("0"), "pending_out": Decimal("0")})
@@ -402,9 +403,9 @@ def get_groups_balance(
         from_group = db.query(Group).filter(Group.id == entry.from_group_id).first()
         to_group = db.query(Group).filter(Group.id == entry.to_group_id).first()
         
-        # El grupo deudor tiene balance negativo, el acreedor positivo
-        group_balances[str(entry.from_group_id)]["pending"] -= entry.amount
-        group_balances[str(entry.to_group_id)]["pending"] += entry.amount
+        # El grupo deudor (from) tiene ese dinero (+), el acreedor (to) le falta (-)
+        group_balances[str(entry.from_group_id)]["pending"] += entry.amount
+        group_balances[str(entry.to_group_id)]["pending"] -= entry.amount
         
         if from_group:
             group_names[str(entry.from_group_id)] = from_group.name
