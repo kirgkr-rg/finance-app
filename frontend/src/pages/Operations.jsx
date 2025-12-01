@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import {
   GitBranch,
   Plus,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 
 const Operations = () => {
+  const { isSupervisor } = useAuth();
   const [operations, setOperations] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -394,10 +396,12 @@ const Operations = () => {
           <h1>Operaciones</h1>
           <p>Seguimiento de flujos de dinero entre empresas</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          <Plus size={18} />
-          Nueva Operación
-        </button>
+        {isSupervisor() && (
+          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+            <Plus size={18} />
+            Nueva Operación
+          </button>
+        )}
       </header>
 
       <div className="filters-bar">
@@ -454,44 +458,48 @@ const Operations = () => {
                   <Eye size={16} />
                   Ver Flujo
                 </button>
-                <button className="btn btn-icon" onClick={() => openEditModal(operation)} title="Editar">
-                  <Edit size={16} />
-                </button>
-                {operation.status === 'open' && (
+                {isSupervisor() && (
                   <>
-                    <button className="btn btn-primary" onClick={() => openTransferModal(operation)}>
-                      <Plus size={16} />
-                      Transferencia
+                    <button className="btn btn-icon" onClick={() => openEditModal(operation)} title="Editar">
+                      <Edit size={16} />
                     </button>
-                    <button 
-                      className="btn btn-success btn-small"
-                      onClick={() => updateStatus(operation.id, 'completed')}
-                    >
-                      Completar
-                    </button>
-                    <button 
-                      className="btn btn-danger btn-small"
-                      onClick={() => updateStatus(operation.id, 'cancelled')}
-                    >
-                      Cancelar
-                    </button>
-                  </>
-                )}
-                {operation.status !== 'open' && (
-                  <>
-                    <button 
-                      className="btn btn-secondary btn-small"
-                      onClick={() => updateStatus(operation.id, 'open')}
-                    >
-                      Reabrir
-                    </button>
-                    <button 
-                      className="btn btn-icon danger"
-                      onClick={() => handleDeleteOperation(operation)}
-                      title="Eliminar"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {operation.status === 'open' && (
+                      <>
+                        <button className="btn btn-primary" onClick={() => openTransferModal(operation)}>
+                          <Plus size={16} />
+                          Transferencia
+                        </button>
+                        <button 
+                          className="btn btn-success btn-small"
+                          onClick={() => updateStatus(operation.id, 'completed')}
+                        >
+                          Completar
+                        </button>
+                        <button 
+                          className="btn btn-danger btn-small"
+                          onClick={() => updateStatus(operation.id, 'cancelled')}
+                        >
+                          Cancelar
+                        </button>
+                      </>
+                    )}
+                    {operation.status !== 'open' && (
+                      <>
+                        <button 
+                          className="btn btn-secondary btn-small"
+                          onClick={() => updateStatus(operation.id, 'open')}
+                        >
+                          Reabrir
+                        </button>
+                        <button 
+                          className="btn btn-icon danger"
+                          onClick={() => handleDeleteOperation(operation)}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>

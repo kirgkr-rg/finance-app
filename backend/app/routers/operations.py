@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 from typing import List
 from uuid import UUID
 from datetime import datetime
@@ -7,13 +8,13 @@ from decimal import Decimal
 from collections import defaultdict
 
 from app.database import get_db
-from app.models import User, Operation, Transaction, Account
+from app.models import User, Operation, Transaction, Account, AccountPermission
 from app.schemas import (
     OperationCreate, OperationUpdate, OperationResponse,
     OperationWithTransactions, OperationFlowMap, OperationFlowNode, OperationFlowEdge,
     OperationGroupNode
 )
-from app.auth import get_current_supervisor
+from app.auth import get_current_user, get_current_supervisor
 
 router = APIRouter(prefix="/api/operations", tags=["Operaciones"])
 
@@ -40,16 +41,53 @@ def create_operation(
     return operation
 
 
+def get_user_permitted_account_ids(db: Session, user: User) -> List[UUID]:
+    """Obtener IDs de cuentas a las que el usuario tiene acceso."""
+    if user.role == "supervisor":
+        return None  # None significa todas
+    
+    return [p.account_id for p in db.query(AccountPermission).filter(
+        AccountPermission.user_id == user.id,
+        AccountPermission.can_view == True
+    ).all()]
+
+
+def get_user_operation_ids(db: Session, user: User) -> List[UUID]:
+    """Obtener IDs de operaciones que involucran cuentas del usuario."""
+    permitted_account_ids = get_user_permitted_account_ids(db, user)
+    
+    if permitted_account_ids is None:
+        return None  # Supervisor ve todas
+    
+    # Buscar operaciones con transacciones en cuentas permitidas
+    operation_ids = db.query(Transaction.operation_id).filter(
+        Transaction.operation_id != None,
+        or_(
+            Transaction.from_account_id.in_(permitted_account_ids),
+            Transaction.to_account_id.in_(permitted_account_ids)
+        )
+    ).distinct().all()
+    
+    return [op_id[0] for op_id in operation_ids]
+
+
 @router.get("/", response_model=List[OperationResponse])
 def list_operations(
     status: str = None,
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(get_current_supervisor),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Listar operaciones (solo supervisores)."""
+    """Listar operaciones. Supervisores ven todas, usuarios solo las de sus cuentas."""
     query = db.query(Operation).order_by(Operation.created_at.desc())
+    
+    if current_user.role != "supervisor":
+        operation_ids = get_user_operation_ids(db, current_user)
+        if operation_ids:
+            query = query.filter(Operation.id.in_(operation_ids))
+        else:
+            return []  # No tiene operaciones
     
     if status:
         query = query.filter(Operation.status == status)
@@ -60,7 +98,7 @@ def list_operations(
 @router.get("/{operation_id}", response_model=OperationWithTransactions)
 def get_operation(
     operation_id: UUID,
-    current_user: User = Depends(get_current_supervisor),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener una operación con sus transacciones."""
@@ -77,17 +115,35 @@ def get_operation(
             detail="Operación no encontrada"
         )
     
+    # Verificar acceso para usuarios normales
+    if current_user.role != "supervisor":
+        operation_ids = get_user_operation_ids(db, current_user)
+        if not operation_ids or operation_id not in operation_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para ver esta operación"
+            )
+    
     return operation
 
 
 @router.get("/{operation_id}/flow", response_model=OperationFlowMap)
 def get_operation_flow(
     operation_id: UUID,
-    current_user: User = Depends(get_current_supervisor),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener el mapa de flujo de una operación."""
     from app.models import Company
+    
+    # Verificar acceso para usuarios normales
+    if current_user.role != "supervisor":
+        operation_ids = get_user_operation_ids(db, current_user)
+        if not operation_ids or operation_id not in operation_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para ver esta operación"
+            )
     
     operation = db.query(Operation).filter(
         Operation.id == operation_id
@@ -236,21 +292,35 @@ def delete_operation(
 
 @router.get("/summary/groups-balance")
 def get_groups_balance(
-    current_user: User = Depends(get_current_supervisor),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener el balance neto entre grupos de todas las operaciones."""
     from app.models import Company, Group
     
     # Obtener todas las transacciones de tipo transfer que tienen operación
-    transactions = db.query(Transaction).filter(
+    query = db.query(Transaction).filter(
         Transaction.transaction_type == "transfer",
         Transaction.from_account_id.isnot(None),
         Transaction.to_account_id.isnot(None)
     ).options(
         joinedload(Transaction.from_account).joinedload(Account.company).joinedload(Company.group),
         joinedload(Transaction.to_account).joinedload(Account.company).joinedload(Company.group)
-    ).all()
+    )
+    
+    # Filtrar por cuentas del usuario si no es supervisor
+    if current_user.role != "supervisor":
+        permitted_account_ids = get_user_permitted_account_ids(db, current_user)
+        if not permitted_account_ids:
+            return []
+        query = query.filter(
+            or_(
+                Transaction.from_account_id.in_(permitted_account_ids),
+                Transaction.to_account_id.in_(permitted_account_ids)
+            )
+        )
+    
+    transactions = query.all()
     
     # Calcular balance entre grupos
     # Positivo = el grupo ha recibido más de lo que ha enviado
@@ -296,24 +366,37 @@ def get_groups_balance(
 
 @router.get("/summary/dashboard")
 def get_operations_dashboard(
-    current_user: User = Depends(get_current_supervisor),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener resumen de operaciones para el dashboard."""
+    # Filtrar por operaciones del usuario si no es supervisor
+    base_query = db.query(Operation)
+    
+    if current_user.role != "supervisor":
+        operation_ids = get_user_operation_ids(db, current_user)
+        if not operation_ids:
+            return {
+                "open_operations": [],
+                "recent_operations": [],
+                "counts": {"open": 0, "completed": 0, "cancelled": 0}
+            }
+        base_query = base_query.filter(Operation.id.in_(operation_ids))
+    
     # Operaciones abiertas
-    open_operations = db.query(Operation).filter(
+    open_operations = base_query.filter(
         Operation.status == "open"
     ).order_by(Operation.created_at.desc()).all()
     
-    # Últimas operaciones (todas)
-    recent_operations = db.query(Operation).order_by(
+    # Últimas operaciones (todas del usuario)
+    recent_operations = base_query.order_by(
         Operation.updated_at.desc()
     ).limit(10).all()
     
     # Contar por estado
-    total_open = db.query(Operation).filter(Operation.status == "open").count()
-    total_completed = db.query(Operation).filter(Operation.status == "completed").count()
-    total_cancelled = db.query(Operation).filter(Operation.status == "cancelled").count()
+    total_open = base_query.filter(Operation.status == "open").count()
+    total_completed = base_query.filter(Operation.status == "completed").count()
+    total_cancelled = base_query.filter(Operation.status == "cancelled").count()
     
     return {
         "open_operations": [

@@ -29,14 +29,13 @@ const Dashboard = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (isSupervisor()) {
-        const [summaryRes, balanceRes] = await Promise.all([
-          api.get('/operations/summary/dashboard'),
-          api.get('/operations/summary/groups-balance')
-        ]);
-        setOperationsSummary(summaryRes.data);
-        setGroupsBalance(balanceRes.data);
-      }
+      // Todos los usuarios ven el dashboard (filtrado por backend)
+      const [summaryRes, balanceRes] = await Promise.all([
+        api.get('/operations/summary/dashboard'),
+        api.get('/operations/summary/groups-balance')
+      ]);
+      setOperationsSummary(summaryRes.data);
+      setGroupsBalance(balanceRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -91,8 +90,8 @@ const Dashboard = () => {
     );
   }
 
-  // Si no es supervisor, mostrar mensaje simple
-  if (!isSupervisor()) {
+  // Si no hay datos de operaciones
+  if (!operationsSummary) {
     return (
       <div className="dashboard">
         <header className="page-header">
@@ -102,7 +101,7 @@ const Dashboard = () => {
           </div>
         </header>
         <div className="card">
-          <p>Accede a las empresas y cuentas desde el menú lateral.</p>
+          <p>No tienes operaciones asignadas. Accede a las empresas y cuentas desde el menú lateral.</p>
         </div>
       </div>
     );
