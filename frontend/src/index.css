@@ -974,30 +974,33 @@ body {
 
 /* Pending entries in flow */
 .pending-map {
-  background: #fffbeb;
-  border: 2px dashed #d97706;
-  border-radius: var(--radius);
-  padding: 1rem;
+  margin-bottom: 2rem;
   margin-top: 1.5rem;
 }
 
 .pending-map h3 {
-  color: #92400e;
-  margin-bottom: 1rem;
+  color: #d97706;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pending-map h3::before {
+  content: "📝";
 }
 
 .flow-edge.pending-edge {
   border: 2px dashed #d97706;
-  background: #fff;
 }
 
-.flow-edge.pending-edge .flow-amount {
-  color: #b45309;
-  font-weight: 700;
+.flow-edge.pending-edge .flow-node.from {
+  background: rgba(217, 119, 6, 0.2);
+  border-color: #d97706;
 }
 
-.flow-arrow.pending {
-  border-style: dashed;
+.flow-edge.pending-edge .flow-node.to {
+  background: rgba(217, 119, 6, 0.2);
+  border-color: #d97706;
 }
 
 .flow-arrow.pending svg {
@@ -1005,12 +1008,13 @@ body {
 }
 
 .flow-edge.pending-edge.settled {
-  opacity: 0.6;
+  opacity: 0.5;
   border-color: #9ca3af;
 }
 
-.flow-edge.pending-edge.settled .flow-amount {
-  color: #6b7280;
+.flow-edge.pending-edge.settled .flow-node {
+  background: rgba(156, 163, 175, 0.2);
+  border-color: #9ca3af;
 }
 
 .flow-edge-meta {
