@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 const Transactions = () => {
-  const { isSupervisor, isDemo, canEdit } = useAuth();
+  const { isSupervisor } = useAuth();
   const [transactions, setTransactions] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -144,13 +144,6 @@ const Transactions = () => {
       style: 'currency',
       currency: currency,
     }).format(amount);
-  };
-
-  const displayAmount = (amount, currency = 'EUR') => {
-    if (isDemo()) {
-      return '****';
-    }
-    return formatCurrency(amount, currency);
   };
 
   const formatDate = (dateString) => {
@@ -429,7 +422,7 @@ const Transactions = () => {
             <ArrowLeftRight size={18} />
             Transferir
           </button>
-          {canEdit() && (
+          {isSupervisor() && (
             <>
               <button className="btn btn-success" onClick={() => openModal('deposit')}>
                 <ArrowDownLeft size={18} />
@@ -468,7 +461,7 @@ const Transactions = () => {
                   <th>Destino</th>
                   <th className="text-right">Monto</th>
                   <th>Fecha</th>
-                  {canEdit() && <th></th>}
+                  {isSupervisor() && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -502,11 +495,11 @@ const Transactions = () => {
                         tx.transaction_type === 'deposit' ? 'positive' : 
                         tx.transaction_type === 'withdrawal' ? 'negative' : ''
                       }`}>
-                        {displayAmount(tx.amount)}
+                        {formatCurrency(tx.amount)}
                       </span>
                     </td>
                     <td className="date-cell">{formatDate(tx.transaction_date || tx.created_at)}</td>
-                    {canEdit() && (
+                    {isSupervisor() && (
                       <td>
                         <div className="table-actions">
                           <button 
