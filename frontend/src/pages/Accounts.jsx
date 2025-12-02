@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Wallet, Plus, X, Edit, Trash2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { Wallet, Plus, X, Edit, Trash2, ChevronDown, ChevronRight, RefreshCw, Eye, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, RotateCcw, GitBranch } from 'lucide-react';
 
 const Accounts = () => {
   const { isSupervisor } = useAuth();
@@ -31,6 +31,11 @@ const Accounts = () => {
   const [targetBalance, setTargetBalance] = useState('');
   const [adjustDescription, setAdjustDescription] = useState('Ajuste de saldo');
   const [adjustError, setAdjustError] = useState('');
+
+  // Estado para ver transacciones de cuenta
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [accountTransactions, setAccountTransactions] = useState([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -213,6 +218,52 @@ const Accounts = () => {
     setExpandedCompanies({});
   };
 
+  // Funciones para ver transacciones de cuenta
+  const viewAccountTransactions = async (account) => {
+    setSelectedAccount(account);
+    setLoadingTransactions(true);
+    try {
+      const response = await api.get(`/transactions/?account_id=${account.id}&limit=50`);
+      setAccountTransactions(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+      setAccountTransactions([]);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+
+  const closeTransactionsModal = () => {
+    setSelectedAccount(null);
+    setAccountTransactions([]);
+  };
+
+  const getTransactionIcon = (type) => {
+    switch(type) {
+      case 'deposit': return <ArrowDownLeft size={16} className="text-success" />;
+      case 'withdrawal': return <ArrowUpRight size={16} className="text-danger" />;
+      case 'confirming_settlement': return <RotateCcw size={16} className="text-purple" />;
+      default: return <ArrowLeftRight size={16} className="text-primary" />;
+    }
+  };
+
+  const getTransactionLabel = (type) => {
+    switch(type) {
+      case 'deposit': return 'Depósito';
+      case 'withdrawal': return 'Retiro';
+      case 'confirming_settlement': return 'Vto. Confirming';
+      default: return 'Transferencia';
+    }
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
   // Filtrar empresas por grupo
   const filteredCompanies = companies.filter(company => {
     if (selectedGroupFilter === 'all') return true;
@@ -328,12 +379,16 @@ const Accounts = () => {
                       <th>Moneda</th>
                       <th className="text-right">Saldo</th>
                       <th className="text-right">Disponible</th>
-                      {isSupervisor() && <th>Acciones</th>}
+                      <th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {companyAccounts.map((account) => (
-                      <tr key={account.id}>
+                      <tr 
+                        key={account.id} 
+                        className="clickable-row"
+                        onClick={() => viewAccountTransactions(account)}
+                      >
                         <td>
                           <div className="account-name-cell">
                             <Wallet size={18} />
@@ -356,33 +411,42 @@ const Accounts = () => {
                             {displayAmount(account.available, account.currency)}
                           </span>
                         </td>
-                        {isSupervisor() && (
-                          <td>
-                            <div className="table-actions">
-                              <button 
-                                className="btn btn-icon" 
-                                onClick={() => openAdjustModal(account)}
-                                title="Ajustar saldo"
-                              >
-                                <RefreshCw size={16} />
-                              </button>
-                              <button 
-                                className="btn btn-icon" 
-                                onClick={() => handleEdit(account)}
-                                title="Editar cuenta"
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button 
-                                className="btn btn-icon danger" 
-                                onClick={() => handleDelete(account)}
-                                title="Eliminar cuenta"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </td>
-                        )}
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div className="table-actions">
+                            <button 
+                              className="btn btn-icon" 
+                              onClick={() => viewAccountTransactions(account)}
+                              title="Ver movimientos"
+                            >
+                              <Eye size={16} />
+                            </button>
+                            {isSupervisor() && (
+                              <>
+                                <button 
+                                  className="btn btn-icon" 
+                                  onClick={() => openAdjustModal(account)}
+                                  title="Ajustar saldo"
+                                >
+                                  <RefreshCw size={16} />
+                                </button>
+                                <button 
+                                  className="btn btn-icon" 
+                                  onClick={() => handleEdit(account)}
+                                  title="Editar cuenta"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button 
+                                  className="btn btn-icon danger" 
+                                  onClick={() => handleDelete(account)}
+                                  title="Eliminar cuenta"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -629,6 +693,106 @@ const Accounts = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ver Transacciones de Cuenta */}
+      {selectedAccount && (
+        <div className="modal-overlay" onClick={closeTransactionsModal}>
+          <div className="modal modal-xlarge" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>{selectedAccount.name}</h2>
+                <span className="modal-subtitle">
+                  {selectedAccount.company?.name} • 
+                  {selectedAccount.account_type === 'corriente' && ' Cuenta Corriente'}
+                  {selectedAccount.account_type === 'credito' && ' Línea de Crédito'}
+                  {selectedAccount.account_type === 'confirming' && ' Confirming'}
+                  {' • '}Saldo: {formatCurrency(selectedAccount.balance)} 
+                  {' • '}Disponible: {formatCurrency(selectedAccount.available)}
+                </span>
+              </div>
+              <button className="btn btn-icon" onClick={closeTransactionsModal}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {loadingTransactions ? (
+                <div className="loading-container">
+                  <RefreshCw className="spin" size={32} />
+                  <p>Cargando movimientos...</p>
+                </div>
+              ) : accountTransactions.length === 0 ? (
+                <div className="empty-state">
+                  <Wallet size={48} />
+                  <h3>Sin movimientos</h3>
+                  <p>Esta cuenta no tiene transacciones</p>
+                </div>
+              ) : (
+                <div className="transactions-table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Descripción</th>
+                        <th>Origen / Destino</th>
+                        <th className="text-right">Monto</th>
+                        <th className="text-right">Saldo</th>
+                        <th>Operación</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accountTransactions.map((tx) => {
+                        const isOutgoing = tx.from_account_id === selectedAccount.id;
+                        const balanceAfter = isOutgoing ? tx.from_balance_after : tx.to_balance_after;
+                        const otherAccount = isOutgoing ? tx.to_account : tx.from_account;
+                        return (
+                          <tr key={tx.id}>
+                            <td className="date-cell">{formatDate(tx.transaction_date || tx.created_at)}</td>
+                            <td>
+                              <div className="transaction-type">
+                                {getTransactionIcon(tx.transaction_type)}
+                                <span>{getTransactionLabel(tx.transaction_type)}</span>
+                              </div>
+                            </td>
+                            <td>{tx.description || '-'}</td>
+                            <td>
+                              {otherAccount ? (
+                                <div className="account-cell">
+                                  <span className="account-name">{otherAccount.name}</span>
+                                  <span className="company-name">{otherAccount.company?.name}</span>
+                                </div>
+                              ) : '-'}
+                            </td>
+                            <td className="text-right">
+                              <span className={`amount ${isOutgoing ? 'negative' : 'positive'}`}>
+                                {isOutgoing ? '-' : '+'}{formatCurrency(tx.amount)}
+                              </span>
+                            </td>
+                            <td className="text-right">
+                              {balanceAfter !== null && balanceAfter !== undefined ? (
+                                <span className={`balance ${parseFloat(balanceAfter) >= 0 ? 'positive' : 'negative'}`}>
+                                  {formatCurrency(balanceAfter)}
+                                </span>
+                              ) : '-'}
+                            </td>
+                            <td>
+                              {tx.operation_id ? (
+                                <span className="operation-badge">
+                                  <GitBranch size={14} />
+                                </span>
+                              ) : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
