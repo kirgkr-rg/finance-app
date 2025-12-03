@@ -803,27 +803,29 @@ const Accounts = () => {
               </button>
             </div>
             
-            {/* Botones de acciones */}
-            {isSupervisor() && (
-              <div className="modal-actions-bar">
-                <button className="btn btn-primary" onClick={() => openTxModal('transfer_out')}>
-                  <ArrowUpRight size={16} />
-                  Transferir desde aquí
-                </button>
-                <button className="btn btn-secondary" onClick={() => openTxModal('transfer_in')}>
-                  <ArrowDownLeft size={16} />
-                  Recibir transferencia
-                </button>
-                <button className="btn btn-success" onClick={() => openTxModal('deposit')}>
-                  <ArrowDownLeft size={16} />
-                  Depósito
-                </button>
-                <button className="btn btn-danger" onClick={() => openTxModal('withdrawal')}>
-                  <ArrowUpRight size={16} />
-                  Retiro
-                </button>
-              </div>
-            )}
+            {/* Botones de acciones - Transferencias para todos, depósito/retiro solo supervisor */}
+            <div className="modal-actions-bar">
+              <button className="btn btn-primary" onClick={() => openTxModal('transfer_out')}>
+                <ArrowUpRight size={16} />
+                Transferir desde aquí
+              </button>
+              <button className="btn btn-secondary" onClick={() => openTxModal('transfer_in')}>
+                <ArrowDownLeft size={16} />
+                Recibir transferencia
+              </button>
+              {isSupervisor() && (
+                <>
+                  <button className="btn btn-success" onClick={() => openTxModal('deposit')}>
+                    <ArrowDownLeft size={16} />
+                    Depósito
+                  </button>
+                  <button className="btn btn-danger" onClick={() => openTxModal('withdrawal')}>
+                    <ArrowUpRight size={16} />
+                    Retiro
+                  </button>
+                </>
+              )}
+            </div>
 
             <div className="modal-body">
               {loadingTransactions ? (
