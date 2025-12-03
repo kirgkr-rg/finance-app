@@ -43,6 +43,7 @@ const Accounts = () => {
   const [txFormData, setTxFormData] = useState({
     to_account_id: '',
     from_account_id: '',
+    charge_account_id: '',
     amount: '',
     description: '',
     transaction_date: new Date().toISOString().split('T')[0]
@@ -259,6 +260,7 @@ const Accounts = () => {
     setTxFormData({
       to_account_id: '',
       from_account_id: '',
+      charge_account_id: '',
       amount: '',
       description: '',
       transaction_date: new Date().toISOString().split('T')[0]
@@ -296,6 +298,10 @@ const Accounts = () => {
       } else if (txType === 'withdrawal') {
         payload.from_account_id = selectedAccount.id;
         await api.post('/transactions/withdrawal', payload);
+      } else if (txType === 'confirming_settlement') {
+        payload.confirming_account_id = selectedAccount.id;
+        payload.charge_account_id = txFormData.charge_account_id;
+        await api.post('/transactions/confirming-settlement', payload);
       }
 
       setShowTxModal(false);
@@ -803,7 +809,7 @@ const Accounts = () => {
               </button>
             </div>
             
-            {/* Botones de acciones - Transferencias para todos, depósito/retiro solo supervisor */}
+            {/* Botones de acciones */}
             <div className="modal-actions-bar">
               <button className="btn btn-primary" onClick={() => openTxModal('transfer_out')}>
                 <ArrowUpRight size={16} />
@@ -813,17 +819,19 @@ const Accounts = () => {
                 <ArrowDownLeft size={16} />
                 Recibir transferencia
               </button>
-              {isSupervisor() && (
-                <>
-                  <button className="btn btn-success" onClick={() => openTxModal('deposit')}>
-                    <ArrowDownLeft size={16} />
-                    Depósito
-                  </button>
-                  <button className="btn btn-danger" onClick={() => openTxModal('withdrawal')}>
-                    <ArrowUpRight size={16} />
-                    Retiro
-                  </button>
-                </>
+              <button className="btn btn-success" onClick={() => openTxModal('deposit')}>
+                <ArrowDownLeft size={16} />
+                Depósito
+              </button>
+              <button className="btn btn-danger" onClick={() => openTxModal('withdrawal')}>
+                <ArrowUpRight size={16} />
+                Retiro
+              </button>
+              {selectedAccount.account_type === 'confirming' && (
+                <button className="btn btn-purple" onClick={() => openTxModal('confirming_settlement')}>
+                  <RotateCcw size={16} />
+                  Vto. Confirming
+                </button>
               )}
             </div>
 
@@ -917,6 +925,7 @@ const Accounts = () => {
                 {txType === 'transfer_in' && 'Recibir transferencia'}
                 {txType === 'deposit' && 'Nuevo Depósito'}
                 {txType === 'withdrawal' && 'Nuevo Retiro'}
+                {txType === 'confirming_settlement' && 'Vencimiento Confirming'}
               </h2>
               <button className="btn btn-icon" onClick={() => setShowTxModal(false)}>
                 <X size={20} />
@@ -1009,9 +1018,54 @@ const Accounts = () => {
                 </div>
               )}
 
+              {/* Vencimiento Confirming: seleccionar cuenta de cargo */}
+              {txType === 'confirming_settlement' && (
+                <>
+                  <div className="info-box" style={{background: 'rgba(139, 92, 246, 0.1)', borderColor: '#8b5cf6'}}>
+                    Registra el vencimiento de una factura pagada por confirming. 
+                    El banco cobrará de la cuenta corriente y se regenerará el disponible del confirming.
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Empresa de la cuenta de cargo</label>
+                      <select
+                        value={toCompanyFilter}
+                        onChange={(e) => {
+                          setToCompanyFilter(e.target.value);
+                          setTxFormData({ ...txFormData, charge_account_id: '' });
+                        }}
+                      >
+                        <option value="">Todas las empresas</option>
+                        {companies.map((company) => (
+                          <option key={company.id} value={company.id}>{company.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Cuenta de cargo (corriente)</label>
+                      <select
+                        value={txFormData.charge_account_id}
+                        onChange={(e) => setTxFormData({ ...txFormData, charge_account_id: e.target.value })}
+                        required
+                      >
+                        <option value="">Seleccionar cuenta</option>
+                        {accounts
+                          .filter(a => a.account_type === 'corriente')
+                          .filter(a => !toCompanyFilter || a.company_id === toCompanyFilter)
+                          .map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {!toCompanyFilter && `${account.company?.name} - `}{account.name} ({formatCurrency(account.balance)})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="form-row">
                 <div className="form-group">
-                  <label>Monto</label>
+                  <label>{txType === 'confirming_settlement' ? 'Importe del vencimiento' : 'Monto'}</label>
                   <input
                     type="number"
                     value={txFormData.amount}
