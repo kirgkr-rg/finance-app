@@ -37,6 +37,20 @@ const Accounts = () => {
   const [accountTransactions, setAccountTransactions] = useState([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
 
+  // Estado para crear transacciones desde extracto
+  const [showTxModal, setShowTxModal] = useState(false);
+  const [txType, setTxType] = useState('transfer');
+  const [txFormData, setTxFormData] = useState({
+    to_account_id: '',
+    from_account_id: '',
+    amount: '',
+    description: '',
+    transaction_date: new Date().toISOString().split('T')[0]
+  });
+  const [txError, setTxError] = useState('');
+  const [txSubmitting, setTxSubmitting] = useState(false);
+  const [toCompanyFilter, setToCompanyFilter] = useState('');
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -236,6 +250,77 @@ const Accounts = () => {
   const closeTransactionsModal = () => {
     setSelectedAccount(null);
     setAccountTransactions([]);
+    setShowTxModal(false);
+  };
+
+  // Funciones para crear transacciones desde extracto
+  const openTxModal = (type) => {
+    setTxType(type);
+    setTxFormData({
+      to_account_id: '',
+      from_account_id: '',
+      amount: '',
+      description: '',
+      transaction_date: new Date().toISOString().split('T')[0]
+    });
+    setToCompanyFilter('');
+    setTxError('');
+    setShowTxModal(true);
+  };
+
+  const handleTxSubmit = async (e) => {
+    e.preventDefault();
+    setTxError('');
+    setTxSubmitting(true);
+
+    try {
+      const payload = {
+        amount: parseFloat(txFormData.amount),
+        description: txFormData.description,
+        transaction_date: txFormData.transaction_date ? new Date(txFormData.transaction_date).toISOString() : null
+      };
+
+      if (txType === 'transfer_out') {
+        // Transferencia saliente: desde esta cuenta a otra
+        payload.from_account_id = selectedAccount.id;
+        payload.to_account_id = txFormData.to_account_id;
+        await api.post('/transactions/transfer', payload);
+      } else if (txType === 'transfer_in') {
+        // Transferencia entrante: desde otra cuenta a esta
+        payload.from_account_id = txFormData.from_account_id;
+        payload.to_account_id = selectedAccount.id;
+        await api.post('/transactions/transfer', payload);
+      } else if (txType === 'deposit') {
+        payload.to_account_id = selectedAccount.id;
+        await api.post('/transactions/deposit', payload);
+      } else if (txType === 'withdrawal') {
+        payload.from_account_id = selectedAccount.id;
+        await api.post('/transactions/withdrawal', payload);
+      }
+
+      setShowTxModal(false);
+      // Recargar transacciones y cuentas
+      const [txRes, accRes] = await Promise.all([
+        api.get(`/transactions/?account_id=${selectedAccount.id}&limit=50`),
+        api.get('/accounts/')
+      ]);
+      setAccountTransactions(txRes.data);
+      setAccounts(accRes.data);
+      // Actualizar selectedAccount con nuevo saldo
+      const updatedAccount = accRes.data.find(a => a.id === selectedAccount.id);
+      if (updatedAccount) setSelectedAccount(updatedAccount);
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setTxError(detail.map(e => e.msg).join(', '));
+      } else if (typeof detail === 'string') {
+        setTxError(detail);
+      } else {
+        setTxError('Error al procesar la transacción');
+      }
+    } finally {
+      setTxSubmitting(false);
+    }
   };
 
   const getTransactionIcon = (type) => {
@@ -698,7 +783,7 @@ const Accounts = () => {
       )}
 
       {/* Modal Ver Transacciones de Cuenta */}
-      {selectedAccount && (
+      {selectedAccount && !showTxModal && (
         <div className="modal-overlay" onClick={closeTransactionsModal}>
           <div className="modal modal-xlarge" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -717,6 +802,29 @@ const Accounts = () => {
                 <X size={20} />
               </button>
             </div>
+            
+            {/* Botones de acciones */}
+            {isSupervisor() && (
+              <div className="modal-actions-bar">
+                <button className="btn btn-primary" onClick={() => openTxModal('transfer_out')}>
+                  <ArrowUpRight size={16} />
+                  Transferir desde aquí
+                </button>
+                <button className="btn btn-secondary" onClick={() => openTxModal('transfer_in')}>
+                  <ArrowDownLeft size={16} />
+                  Recibir transferencia
+                </button>
+                <button className="btn btn-success" onClick={() => openTxModal('deposit')}>
+                  <ArrowDownLeft size={16} />
+                  Depósito
+                </button>
+                <button className="btn btn-danger" onClick={() => openTxModal('withdrawal')}>
+                  <ArrowUpRight size={16} />
+                  Retiro
+                </button>
+              </div>
+            )}
+
             <div className="modal-body">
               {loadingTransactions ? (
                 <div className="loading-container">
@@ -793,6 +901,154 @@ const Accounts = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Nueva Transacción desde Extracto */}
+      {showTxModal && selectedAccount && (
+        <div className="modal-overlay" onClick={() => setShowTxModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>
+                {txType === 'transfer_out' && 'Transferir desde esta cuenta'}
+                {txType === 'transfer_in' && 'Recibir transferencia'}
+                {txType === 'deposit' && 'Nuevo Depósito'}
+                {txType === 'withdrawal' && 'Nuevo Retiro'}
+              </h2>
+              <button className="btn btn-icon" onClick={() => setShowTxModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleTxSubmit}>
+              {txError && <div className="error-message">{txError}</div>}
+
+              <div className="info-box">
+                <strong>Cuenta:</strong> {selectedAccount.company?.name} - {selectedAccount.name}<br />
+                <strong>Saldo actual:</strong> {formatCurrency(selectedAccount.balance)} | 
+                <strong> Disponible:</strong> {formatCurrency(selectedAccount.available)}
+              </div>
+
+              {/* Transferencia saliente: seleccionar destino */}
+              {txType === 'transfer_out' && (
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Empresa destino</label>
+                    <select
+                      value={toCompanyFilter}
+                      onChange={(e) => {
+                        setToCompanyFilter(e.target.value);
+                        setTxFormData({ ...txFormData, to_account_id: '' });
+                      }}
+                    >
+                      <option value="">Todas las empresas</option>
+                      {companies.map((company) => (
+                        <option key={company.id} value={company.id}>{company.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Cuenta destino</label>
+                    <select
+                      value={txFormData.to_account_id}
+                      onChange={(e) => setTxFormData({ ...txFormData, to_account_id: e.target.value })}
+                      required
+                    >
+                      <option value="">Seleccionar cuenta</option>
+                      {accounts
+                        .filter(a => a.id !== selectedAccount.id)
+                        .filter(a => !toCompanyFilter || a.company_id === toCompanyFilter)
+                        .map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {!toCompanyFilter && `${account.company?.name} - `}{account.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Transferencia entrante: seleccionar origen */}
+              {txType === 'transfer_in' && (
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Empresa origen</label>
+                    <select
+                      value={toCompanyFilter}
+                      onChange={(e) => {
+                        setToCompanyFilter(e.target.value);
+                        setTxFormData({ ...txFormData, from_account_id: '' });
+                      }}
+                    >
+                      <option value="">Todas las empresas</option>
+                      {companies.map((company) => (
+                        <option key={company.id} value={company.id}>{company.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Cuenta origen</label>
+                    <select
+                      value={txFormData.from_account_id}
+                      onChange={(e) => setTxFormData({ ...txFormData, from_account_id: e.target.value })}
+                      required
+                    >
+                      <option value="">Seleccionar cuenta</option>
+                      {accounts
+                        .filter(a => a.id !== selectedAccount.id)
+                        .filter(a => !toCompanyFilter || a.company_id === toCompanyFilter)
+                        .map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {!toCompanyFilter && `${account.company?.name} - `}{account.name} ({formatCurrency(account.balance)})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Monto</label>
+                  <input
+                    type="number"
+                    value={txFormData.amount}
+                    onChange={(e) => setTxFormData({ ...txFormData, amount: e.target.value })}
+                    placeholder="0.00"
+                    min="0.01"
+                    step="0.01"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Fecha</label>
+                  <input
+                    type="date"
+                    value={txFormData.transaction_date}
+                    onChange={(e) => setTxFormData({ ...txFormData, transaction_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Descripción</label>
+                <input
+                  type="text"
+                  value={txFormData.description}
+                  onChange={(e) => setTxFormData({ ...txFormData, description: e.target.value })}
+                  placeholder="Descripción del movimiento"
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowTxModal(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={txSubmitting}>
+                  {txSubmitting ? 'Procesando...' : 'Confirmar'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

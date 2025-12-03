@@ -1206,6 +1206,20 @@ body {
   border-top: 1px solid var(--border);
 }
 
+.modal-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-actions-bar .btn {
+  font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+}
+
 .modal-actions:has(.modal-actions-right) {
   justify-content: space-between;
 }
