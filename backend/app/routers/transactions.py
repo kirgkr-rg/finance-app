@@ -130,10 +130,10 @@ def create_transfer(
 @router.post("/deposit", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 def create_deposit(
     deposit_data: DepositCreate,
-    current_user: User = Depends(get_current_supervisor),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Realizar un depósito (solo supervisores)."""
+    """Realizar un depósito (supervisores o usuarios con permiso en la cuenta)."""
     account = db.query(Account).filter(
         Account.id == deposit_data.to_account_id,
         Account.is_active == True
@@ -144,6 +144,10 @@ def create_deposit(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cuenta no encontrada"
         )
+    
+    # Verificar permisos
+    if current_user.role != "supervisor":
+        check_account_permission(db, current_user, account.id)
     
     account.balance += deposit_data.amount
     
@@ -168,10 +172,10 @@ def create_deposit(
 @router.post("/withdrawal", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 def create_withdrawal(
     withdrawal_data: WithdrawalCreate,
-    current_user: User = Depends(get_current_supervisor),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Realizar un retiro (solo supervisores)."""
+    """Realizar un retiro (supervisores o usuarios con permiso en la cuenta)."""
     account = db.query(Account).filter(
         Account.id == withdrawal_data.from_account_id,
         Account.is_active == True
@@ -182,6 +186,10 @@ def create_withdrawal(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Cuenta no encontrada"
         )
+    
+    # Verificar permisos
+    if current_user.role != "supervisor":
+        check_account_permission(db, current_user, account.id)
     
     if account.balance < withdrawal_data.amount:
         raise HTTPException(
@@ -212,11 +220,11 @@ def create_withdrawal(
 @router.post("/confirming-settlement", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 def create_confirming_settlement(
     settlement_data: ConfirmingSettlementCreate,
-    current_user: User = Depends(get_current_supervisor),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Registrar vencimiento de confirming (solo supervisores).
+    Registrar vencimiento de confirming (supervisores o usuarios con permiso en las cuentas).
     
     Cuando vence una factura pagada por confirming:
     - El banco cobra de la cuenta corriente indicada
@@ -257,6 +265,11 @@ def create_confirming_settlement(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La cuenta de cargo debe ser una cuenta corriente"
         )
+    
+    # Verificar permisos en ambas cuentas
+    if current_user.role != "supervisor":
+        check_account_permission(db, current_user, confirming_account.id)
+        check_account_permission(db, current_user, charge_account.id)
     
     # Verificar que hay saldo suficiente en la cuenta de cargo
     if charge_account.balance < settlement_data.amount:
